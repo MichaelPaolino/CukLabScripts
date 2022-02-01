@@ -1,10 +1,29 @@
+%% thoughts
+%data holder strategies:
+%1. use child classes to specify types of data that will contain experiment
+%specific data access methods. Question to be addressed is how data will be stored in
+%the intermediate when there is data processing?
+%   a. FSRS_raw -> used to extract raw data from dh class
+%   experiment
+%   b. FSRS_proc? -> used to store and extract processed data
+%   format
+%   c. TR_raw -> used to extract raw data from dh class
+%   d. TR_proc -> used to store and extract processed data
+%2. **try this one first** create a new class that takes data_holder as an input and has its own
+%member data
+%   a. FSRS -> constructor converts dh data into FSRS spectra. Class contains
+%   override methods for common functions, such as plot, contour, etc
+%   b. TR -> similar to FSRS...
+%
+%3. create a general-purpose SQL base extraction method
+
 classdef fsrs < transientSpectra
     properties
         ramanPumpNm = 400;  %raman pump wavelength in nm
         %implement conversions methods
     end
 
-    % Constructor, load, get and set methods with custom implementation
+    %Constructor, load, get and set methods
     methods
         %%CONSTRUCTOR/LOAD METHODS%%
 
@@ -82,29 +101,22 @@ classdef fsrs < transientSpectra
         
     end
     
-    % Methods specific to the fsrs class that cannot be implemented in the transientSpectra class
+    % Methods specific to the fsrs class that cannot be implemented in the
+    % transientSpectra class
     methods
-        
+        %%Properties update methods%%
         %Attempt to automatically find the raman pump wavelength
         function [obj, pumpNm] = findRamanPumpNm(obj, dropGPos)
-            %Automatically finds the raman pump wavelength by trying two strategies: 
-            %1) take the maximum point in each grating position in the fsrs object. 
-            %2) try to resolve a peak and take the half way point of the fwhm as the 
-            %   pump wavelelngth. 
-            %The final pump wavelength is the average of all valid grating positions.
-            %
-            %Inputs:
-            %   dropGPos: user input for grating positions that do not have
-            %   an obvious raman peak.
-            %Outputs:
-            %   obj: the fsrs object with updated pump wavelength and raman shift units
-            %   pumpNm: the nm value of the new pump wavelength
-        
+            %Automatically finds the raman pump wavelength by trying two
+            %strategies: 1) take the maximum point in each grating
+            %position in the fsrs object. 2) try to resolve a peak and take
+            %the half way point of the fwhm as the pump wa
             %remember old units
             tmpUnits = cell(3,1);
             [tmpUnits{:}] = obj.getUnits();
             
-            %update units to units where x-axis is in nm and raman pump scatter is positive
+            %update units to units where x-axis is in nm and raman pump
+            %scatter is positive
             obj = obj.setUnits('nm',[],'%Gain');
             
             %get a single spectra by averaging over any extra dims except grating position (up to 5)
@@ -118,10 +130,12 @@ classdef fsrs < transientSpectra
             %find the raman pump peak (should be strongest signal)
             [val,maxInd] = max(data);
             
-            %find pump peak fwhm while looping over sorted grating positions that do not get dropped
+            %find pump peak fwhm while looping over sorted grating
+            %positions that do not get dropped
             pumpNm = NaN*zeros(1,obj.sizes.nGPos);
             for ii = 1:obj.sizes.nGPos
-                %perform the fwhm routine only if the grating position is not dropped
+                %perform the fwhm routine only if the grating position is
+                %not dropped
                 if ~any(dropGPos == gPosSorted(ii))
                     %find all "fwhm" intercepts in data. Sort in case lambda nm values
                     %are not sorted in ascending order.

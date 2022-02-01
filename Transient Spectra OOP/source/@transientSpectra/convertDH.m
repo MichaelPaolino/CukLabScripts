@@ -1,19 +1,21 @@
+function obj = convertDH(obj, dh_static, dh_array)
 %converts a data_holder object to a FSRS object. Need to come up with some
 %strategy for managing all the different versions until a standardized file
 %format is created for live tweaking and acquisition. May use the availalbe
 %fields as a version signature for now with specific implementations for
 %different versions.
 
-%todo: when abstracting spectra class, change to return appropriate class
-%for each data scheme and drop the "scheme" representation
-
-function obj = convertDH(obj, dh_static, dh_array)
-
     %first determine whether this is a live tweaking or acquisition
     %data_holder
-    isAcquisition = true;
     if ~isfield(dh_array,'Repeat')
         isAcquisition = false;
+    else
+        isAcquisition = true;
+        if ~isfield(dh_static,'SpectCalib')
+            labelSpectCalib = 'x';
+        else
+            labelSpectCalib = 'SpectCalib';
+        end
     end
     
     %get dh_array information
@@ -51,7 +53,11 @@ function obj = convertDH(obj, dh_static, dh_array)
             spectrastd_tmp(:,ii,jj) = dh_array(ii).proc_data(jj).data; %[pixel, array ind, data scheme]
         end
     end
-
+    
+    %Set units for delays and wavelengths
+    obj.delays = obj.delays.changeBaseName('ps','Delay (ps)');
+    obj.wavelengths = obj.wavelengths.changeBaseName('nm','Wavelength (nm)');
+    
     %Format repeat and grating position temporary arrays into final formats
     obj.sizes.nRpts = max(rpts_tmp);
     if isAcquisition
@@ -60,20 +66,20 @@ function obj = convertDH(obj, dh_static, dh_array)
         
         %this assumes the program finished collecting data. todo: add acquisition settings to dh_static
         obj.sizes.nDelays = nArray/obj.sizes.nRpts/obj.sizes.nGPos; 
-        obj.delays = reshape(delays_tmp, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos); %[delays, repeats, grating positions]
+        obj.delays.data = reshape(delays_tmp, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos); %[delays, repeats, grating positions]
         
         %loop through wavelength calibrations for multiple grating positions
-        obj.wavelengths = zeros(obj.sizes.nPixels, obj.sizes.nGPos);
+        obj.wavelengths.data = zeros(obj.sizes.nPixels, obj.sizes.nGPos);
         for ii = 1:obj.sizes.nGPos
             %assumes that the grating positions are in the same order as they were acquired
-            obj.wavelengths(:,ii) = dh_static.SpectCalib(ii).Wavelengths;   
+            obj.wavelengths(:,ii) = dh_static.(labelSpectCalib)(ii).Wavelengths;   
         end
     else
         obj.gPos = dh_static.Grating_Position;
         obj.sizes.nGPos = length(obj.gPos);
-        obj.delays = dh_static.Delay;
+        obj.delays.data = dh_static.Delay;
         obj.sizes.nDelays = 1;
-        obj.wavelengths = dh_static.Wavelengths(:);
+        obj.wavelengths.data = dh_static.Wavelengths(:);
     end
 
     %get list of acquired schemes
@@ -82,7 +88,11 @@ function obj = convertDH(obj, dh_static, dh_array)
        obj.schemes(ii) = {dh_array(1).proc_data.dataScheme}; 
     end
     
+    %set units for spectra
+    obj.spectra = obj.spectra.changeBaseName('OD','\DeltaAbs. (OD)');
+    obj.spectra_std = obj.spectra_std.changeBaseName('OD','\DeltaAbs. (OD)');
+    
     %finally format raw data into final format
-    obj.spectra = reshape(spectra_tmp, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
-    obj.spectra_std = reshape(spectrastd_tmp, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
+    obj.spectra.data = reshape(spectra_tmp, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
+    obj.spectra_std.data = reshape(spectrastd_tmp, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
 end

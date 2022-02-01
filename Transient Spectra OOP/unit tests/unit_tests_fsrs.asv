@@ -31,7 +31,7 @@ myGsFsrs = myFSRS.loadPath('Sample_None_Methanol.mat');
 
 %% plotSpectra tests on a FSRS acquired TR data set (probe chirp test)
 %load a TR data set that contains many delays but one repeat and one grating position:
-[~,~,myTR] = loadPath(fsrs(),'Sample_BSP_Air.mat');
+[~,~,myTR] = loadPath(fsrs(),'22-01-07_14h18m15s_Sample_BSP_Air.mat');
 
 % plot all TR spectra data using the default options for plotSpectra()
 figure;
@@ -55,52 +55,18 @@ myTR.plotSpectra('delays',[0,0.001,0.5,1]+145.6);
 figure;
 myTR.plotSpectra('delays',[0,0.5,1]+145.6,'-k');
 
-%% test default plotSpectra behavior on data that contains multiple repeats and grating positions 
+%% test default plotSpectra beh
 %load a test data set (live tweaking)
-myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
+myFSRS = loadPath(fsrs(),'22-01-26_12h18m54sOC_sample_1sp_GSraman_slit_closed.mat');
 
-% plot all FSRS spectra from acquisition data
+% plot all FSRS spectra in live tweaking data
 figure;
-myFSRS.plotSpectra();
-ylim([-0.3 1]);
-xlim([-1000 3500]);
-
-% test changing units and plot FSRS spectra
-myFSRS = myFSRS.setUnits('nm',[],'mOD');
-
-figure;
-myFSRS.plotSpectra();
-ylim([-2 5]);
-xlim([375 465]);
-
-%% test updating the raman pump wavelength
-myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
-myFSRS.ramanPumpNm = 380;
-
-figure;
-myFSRS.plotSpectra();
-ylim([-0.3 1]);
-xlim([-500 4000]);
-
-myFSRS = myFSRS.findRamanPumpNm(450);
-figure;
-myFSRS.plotSpectra();
-ylim([-0.3 1]);
-xlim([-1000 3500]);
-
-%% test stiching multiple grating positions
-myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
-myFSRS = myFSRS.stitch();
-myFSRS = myFSRS.findRamanPumpNm([]);
-
-figure;
-myFSRS.plotSpectra();
-ylim([-0.3 1]);
-xlim([-1000 3500]);
+myFSRS.plotSpectra('no legend');
+ylim([-5 10]);
 
 %% plotTrace tests
 %load a test data set (acquisition)
-[~,~,myTR] = loadPath(fsrs(),'Sample_BSP_Air.mat');
+[~,~,myTR] = loadPath(fsrs(),'22-01-07_14h18m15s_Sample_BSP_Air.mat');
 
 figure;
 myTR.plotTrace('wavelengths',[380,400,420,440]);

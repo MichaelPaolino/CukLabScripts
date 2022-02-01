@@ -335,7 +335,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                         
             %sort by wavelengths next
             for ii = 1:size(lInd,2) %loop over grating positions
-                data(:,:,:,ii,:) = data(lInd(:,ii),:,:,ii,:); %[PIXELS, delays, rpts, GRATING POS, schemes]
+                data(:,:,:,ii,:) = data(lInd(ii),:,:,ii,:); %[PIXELS, delays, rpts, GRATING POS, schemes]
             end
             
             %permute and reshape data so that it is easier to interpolate and stitch
@@ -375,9 +375,9 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                 
                 %Next interpolate middle region
                 nInd = ceil(0.5*(length(tmpWl(low1Ind:end))+length(wl(1:high2Ind,ii))));    %average number of in-between indicies
-                midWl = linspace(low1,high2,nInd)';  %new wavelengths in overlap region with linear spacing between them
-                mid1Data = interp1(tmpWl,tmpData,midWl,'linear');   %interpolate 1st grating position on overlap scale
-                mid2Data = interp1(wl(:,ii),data(:,:,ii),midWl,'linear'); %interpolate 2nd grating position on overlap scale
+                midWl = linspace(low1,high2,nInd);  %new wavelengths in overlap region with linear spacing between them
+                mid1Data = interp1(tmpData,tmpWl,midWl,'linear');   %interpolate 1st grating position on overlap scale
+                mid2Data = interp1(data,wl(:,ii),midWl,'linear'); %interpolate 2nd grating position on overlap scale
                 
                 %Execute strategy to combine data in overlap region
                 midData = 0.5*(mid1Data+mid2Data);  %take the average for now
@@ -390,13 +390,9 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         %%--Convert wavelengths and data back to original state and update object parameters--%%
             %reshape and permute data back to original dim order
             data = reshape(tmpData,[],obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nSchemes); %[pixels, delays, rpts, schemes, grating pos]
-            data = permute(data,[1,2,3,5,4]); %[pixels, delays, rpts, grating pos, schemes]
+            data = permute(data,[1,2,3,5,4]); %[PIXELS, delays, rpts, GRATING POS, schemes]
             
-            %update values for object properties
-            obj.spectra.data = data;
-            obj.wavelengths.data = tmpWl;
-            obj.gPos = median(gPosSorted);
-            obj.sizes.nGPos = 1;
+            
             
             %set units back to input units
             obj = obj.setUnits(tmpUnits{:});
