@@ -94,8 +94,8 @@ classdef fsrs < transientSpectra
             %The final pump wavelength is the average of all valid grating positions.
             %
             %Inputs:
-            %   dropGPos: user input for grating positions that do not have
-            %   an obvious raman peak.
+            %   dropGPos: user input for grating positions that do not have an obvious 
+            %   raman peak. todo: find automated way and make input optional
             %Outputs:
             %   obj: the fsrs object with updated pump wavelength and raman shift units
             %   pumpNm: the nm value of the new pump wavelength

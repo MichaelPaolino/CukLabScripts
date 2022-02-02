@@ -146,11 +146,7 @@ classdef doubleWithUnits < double
         
         %list available unit rules
         function unitsOut = listUnits(obj)
-            nUnits = length(obj.unitRules);
-            unitsOut = cell(1,nUnits);
-            for ii = 1:nUnits
-                unitsOut(ii) = {obj.unitRules(ii).unit};
-            end
+            unitsOut = {obj.unitRules.unit};
         end
         
         %return the unit rule index for targetUnit

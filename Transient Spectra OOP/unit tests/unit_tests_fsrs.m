@@ -90,11 +90,29 @@ xlim([-1000 3500]);
 
 %% test stiching multiple grating positions
 myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
-myFSRS = myFSRS.stitch();
-myFSRS = myFSRS.findRamanPumpNm([]);
+myFSRS = myFSRS.findRamanPumpNm(450);
 
-figure;
-myFSRS.plotSpectra();
+figure; hold on;
+myFSRS2 = myFSRS.stitch('average');
+myFSRS2.plotSpectra('no legend');
+
+myFSRS2 = myFSRS.stitch('lower');
+myFSRS2.plotSpectra('no legend');
+
+myFSRS2 = myFSRS.stitch('upper');
+myFSRS2.plotSpectra('no legend');
+
+myFSRS2 = myFSRS.stitch('half');
+myFSRS2.plotSpectra('no legend');
+
+myFSRS2 = myFSRS.stitch('linear');
+myFSRS2.plotSpectra('no legend');
+
+%default call test
+myFSRS2 = myFSRS.stitch();
+
+legend('average','lower','upper','half','linear');
+
 ylim([-0.3 1]);
 xlim([-1000 3500]);
 
@@ -108,3 +126,27 @@ xlim([145 147]);
 
 figure;
 myTR.plotTrace('wavelengths',[350:5:500],'no legend');
+
+%% Test trimming data
+%spectra trim
+myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
+figure;
+myFSRS = myFSRS.trim('wavelengths',[-5000 5000]);
+myFSRS.plotSpectra('no legend');
+myFSRS = myFSRS.trim('wavelengths',[-1000 1000]);
+myFSRS.plotSpectra('no legend');
+
+%delay trim
+[~,~,myTR] = loadPath(fsrs(),'Sample_BSP_Air.mat');
+figure;
+myTR = myTR.trim('delays',[0,1000]);
+myTR.plotTrace('wavelengths',[380,400,420,440],'no legend');
+myTR = myTR.trim('delays',[140,155]);
+myTR.wavelengths.unit = 'nm';
+myTR.plotTrace('wavelengths',[380,400,420,440],'no legend');
+%% Export tests
+myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
+outputStruct = myFSRS.export('');
+
+%% All tests pass
+disp('All tests passed!');

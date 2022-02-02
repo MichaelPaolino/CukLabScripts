@@ -3,14 +3,14 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         %raw data
         spectra = doubleWithUnits();  %[pixels, delays, rpts, grating pos, schemes]
         spectra_std = doubleWithUnits(); %[pixels, delays, rpts, grating pos, schemes]
-        wavelengths = doubleWithUnits();  %[]
-        delays = doubleWithUnits();   %[]
+        wavelengths = doubleWithUnits();  %[pixels, grating pos]
+        delays = doubleWithUnits();   %[delays, repeats, grating pos]
         gPos = zeros(); %[]
         
         %identifying information: todo (?): convert to calss
-        description = struct('name', '',...
-                             'shortName', '', ...
-                             'description', '');
+        desc = struct('name', '',...
+                      'shortName', '', ...
+                      'description', '');
                          
         schemes = {}; %list of data schemes
                          
@@ -44,7 +44,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
 %         convertTransient(obj, targetObj);
 %     end
     
-    %% Constructor, load, get and set methods
+    %% Constructor, load, export, get and set methods
     methods
 
         %%**CONSTRUCTOR METHODS**%%
@@ -105,7 +105,10 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         %convert a data holder into a transientSpectra. See convertDH.m for
         %generic implementation. Override this method in subclasses for specific
         %implementation
-        convertDH(obj, dh_static, dh_array);
+        obj = convertDH(obj, dh_static, dh_array);
+        
+        %export the object data to file
+        [outputStruct, filePath] = export(obj,filePath,varargin)
         
         %%**GET-SET METHODS**%%
         %update units on all unit arrays
@@ -315,7 +318,31 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
     %% Data manipulation methods that modify the spectra
     methods
         %stitches all grating positions together
-        function obj = stitch(obj)
+        function obj = stitch(obj,varargin)
+        % Stitch together available grating positions in object. This works by
+        % sorting the data in ascending wavelength and stitching a pair of grating
+        % positions at a time. For multiple grating positions, the previously
+        % stitched grating position is treated as the first grating position in the
+        % stich pair. The stitching behavior in any overlap region can be done with
+        % the following strageiges: average, lower, upper, half, and linear. 
+        % Stitching preserves all other dimensions, such as repeats and delays.
+        % Stitching currently updates all relevant properties such as wavelengths,
+        % spectra, and grating positions. todo: update spectra_std. todo: may need
+        % to create a case for direct stitching
+        % Inputs (varargin):
+        %   strategy: Optional char array. Choose from 'average', 'lower', 'upper',
+        %       'half', and 'linear'. The default is 'linear'
+        % Outputs:
+        %   obj: object with all grating positions stitched into one and with
+        %       relevat properties updated
+            
+            %optional inputs: strategy for stitching. Default is linear
+            if nargin==2
+                strategy = varargin{1};
+            else
+                strategy = 'linear';
+            end
+            
         %%--Revert units to nm--%%
             %remember old units
             tmpUnits = cell(3,1);
@@ -335,7 +362,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                         
             %sort by wavelengths next
             for ii = 1:size(lInd,2) %loop over grating positions
-                data(:,:,:,ii,:) = data(lInd(ii),:,:,ii,:); %[PIXELS, delays, rpts, GRATING POS, schemes]
+                data(:,:,:,ii,:) = data(lInd(:,ii),:,:,ii,:); %[PIXELS, delays, rpts, GRATING POS, schemes]
             end
             
             %permute and reshape data so that it is easier to interpolate and stitch
@@ -343,10 +370,13 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             data = reshape(data,obj.sizes.nPixels,[],obj.sizes.nGPos); %[pixels, delays*rpts*schemes, grating pos]
             
         %%--Stitch wavelengths and data--%%
+            %grating positions will be stitched in pairs sequentially. If
+            %there are multiple grating positions, already stitched data
+            %will be treated as one grating position
             tmpWl = wl(:,1);    %holder for concatonated wavelengths starting from 1st grating pos
             tmpData = data(:,:,1);  %holder for concatonated data starting from 1st grating pos
-            for ii = 2:obj.sizes.nGPos
-                %isDirectStitch = false;
+            
+            for ii = 2:obj.sizes.nGPos %loop over grating positions starting from the 2nd one
                 
                 %First find overlap region in wavelengths
                 high1 = tmpWl(end);    %highest wavelength in 1st grating position
@@ -369,19 +399,32 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                 %define lower and upper regions
                 lowWl = tmpWl(1:low1Ind-1); %1st grating positions lower wavelengths
                 highWl = wl(high2Ind+1:end,ii); %2nd grating positions higher wavelengths
-                
                 lowData = tmpData(1:low1Ind-1,:);   %1st grating positions lower data
                 highData = data(high2Ind+1:end,:,ii);   %second grating positoins higher data
                 
                 %Next interpolate middle region
                 nInd = ceil(0.5*(length(tmpWl(low1Ind:end))+length(wl(1:high2Ind,ii))));    %average number of in-between indicies
-                midWl = linspace(low1,high2,nInd);  %new wavelengths in overlap region with linear spacing between them
-                mid1Data = interp1(tmpData,tmpWl,midWl,'linear');   %interpolate 1st grating position on overlap scale
-                mid2Data = interp1(data,wl(:,ii),midWl,'linear'); %interpolate 2nd grating position on overlap scale
+                midWl = linspace(low1,high2,nInd)';  %new wavelengths in overlap region with linear spacing between them
+                mid1Data = interp1(tmpWl,tmpData,midWl,'linear');   %interpolate 1st grating position on overlap scale
+                mid2Data = interp1(wl(:,ii),data(:,:,ii),midWl,'linear'); %interpolate 2nd grating position on overlap scale
                 
                 %Execute strategy to combine data in overlap region
-                midData = 0.5*(mid1Data+mid2Data);  %take the average for now
-                
+                switch strategy
+                    case 'average' %take the average in the overlap region
+                        midData = 0.5*(mid1Data+mid2Data);  
+                    case 'lower' %take the lower (1st) grating position
+                        midData = mid1Data;  
+                    case 'upper' %take the higher (2nd) grating position
+                        midData = mid2Data;  
+                    case 'half'  %stitch at half-way point
+                        midData = [mid1Data(1:floor(nInd/2),:); mid2Data((floor(nInd/2)+1):end,:)];
+                    case 'linear'   %do a weighted average with a linear sweep of the weights from the 1st to 2nd grating position
+                        weightsFun = polyfit([midWl(1), midWl(end)],[0, 1],1);    %linear fit for weights
+                        weights = polyval(weightsFun,midWl);    %calculate weights from nm values
+                        midData = mid1Data.*(1-weights)+mid2Data.*weights;  %this does the weighted average
+                    otherwise
+                        error(['Unsupported strategy. Available stragegies are average, lower, upper, half, and linear. Got ' strategy '.']);
+                end
                 %concatonate the three regions across the 1st (pixel) dimension
                 tmpWl = [lowWl; midWl; highWl]; %store in tmpWl so that it can be fed as 1st grating position in next iteration 
                 tmpData = [lowData; midData; highData]; %store in tmpdata so that it can be fed as 1st grating position in next iteration 
@@ -390,12 +433,159 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         %%--Convert wavelengths and data back to original state and update object parameters--%%
             %reshape and permute data back to original dim order
             data = reshape(tmpData,[],obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nSchemes); %[pixels, delays, rpts, schemes, grating pos]
-            data = permute(data,[1,2,3,5,4]); %[PIXELS, delays, rpts, GRATING POS, schemes]
+            data = permute(data,[1,2,3,5,4]); %[pixels, delays, rpts, grating pos, schemes]
             
-            
+            %update values for object properties
+            obj.spectra.data = data;
+            obj.wavelengths.data = tmpWl;
+            obj.gPos = median(gPosSorted);
+            obj.sizes.nPixels = length(tmpWl);
+            obj.sizes.nGPos = 1;
             
             %set units back to input units
             obj = obj.setUnits(tmpUnits{:});
         end
+        
+        function obj = trim(obj, varargin)
+            trim = struct('wls','all',...
+                          'delays','all');
+            
+            %parse varargin
+            if nargin > 1
+                for ii = 1:2:(nargin-1)
+                    assert(ischar(varargin{ii}),...
+                        ['Invalid argument class for name-value pair. Expected class char for name, got ' class(varargin{ii}) '.']);
+                    switch varargin{ii}
+                        case 'wavelengths'
+                            trim.wls = varargin{ii+1};
+                        case 'delays'
+                            trim.delays = varargin{ii+1};
+                        otherwise
+                            error([varargin{ii} ' is not a valid argument name.']); 
+                    end
+                end
+            end
+                      
+            %trim wavelengths
+            if ischar(trim.wls)  %this is a do nothing case
+                % Assert correct input to ensure user isn't accidently doing something they're not aware of
+                assert(strcmp(trim.wls,'all'),'Expected all keyword or wavelength range [wl1, wl2] of type double.');
+                
+            elseif isa(trim.wls,'double')   %this does the wavelength trim
+                %ensure the user has correct input before trimming
+                assert(length(trim.wls)==2, 'Expected wavelength range [wl1, wl2] of type double.');
+                
+                %find the wavelength range indicies
+                wls = obj.wavelengths.data;  %[pixels, gPos]
+                [~,wlInd] = nearestVal(wls,trim.wls,... %wlInd is [2,gPos]
+                                'unique',false,'trim',false); %keep all values 
+                        
+                %for easy looping, do the following dim rearrangement:
+                %[pixels, delays, rpts, gpos, schemes] -> [pixels, delays x rpts x schemes, gpos]
+                tmpSpectra = permute(obj.spectra.data,[1,2,3,5,4]);
+                tmpSpectra = reshape(tmpSpectra,obj.sizes.nPixels,[],obj.sizes.nGPos);
+
+                %Allocate NaN double arrays and place spectra values into it 
+                trimmedSpectra = nan(size(tmpSpectra)); %[pixels, delays x rpts x schemes, gpos]
+                trimmedWls = nan(size(wls)); %[pixels, gpos]
+                trimmedGPos = nan(size(obj.gPos));  %[1,gpos]
+
+                %Flag remove grating positions that do not at all span the desired wavelength range.
+                %There are two things to check here:
+                %1. Is at least one target index is in range of the grating position?
+                %2. Are the found indicies on the same, indicating the target range is above or below the grating position range
+                %If 1 is true or 2 is false, then keep the grating position
+                isIndInRange = any(abs(wls-permute(trim.wls(:),[3,2,1]))<0.01*(max(wls)-min(wls)),[1,3]);
+                keepGPos = or(wlInd(1,:)~=wlInd(2,:),isIndInRange);
+                
+                %loop over grating positions to sub-select range dicated by wlInd
+                for ii = find(keepGPos)
+                    %copy desired subrange for each grating position into the NaN arrays starting from index 1
+                    trimmedWls(1:length(wlInd(1,ii):wlInd(2,ii)),ii) = wls(wlInd(1,ii):wlInd(2,ii),ii);
+                    trimmedSpectra(1:length(wlInd(1,ii):wlInd(2,ii)),:,ii) = tmpSpectra(wlInd(1,ii):wlInd(2,ii),:,ii); 
+
+                    %remove NaN flag from new gPos only if the grating position has data in it
+                    trimmedGPos(ii) = obj.gPos(ii);
+                end
+                
+                %remove any dims that are all NaN
+                trimmedWls = trimmedWls(any(~isnan(trimmedWls),2),~isnan(trimmedGPos)); %[wls, gpos]
+                trimmedSpectra = trimmedSpectra(any(~isnan(trimmedWls),2),:,~isnan(trimmedGPos)); %[pixels, delays x rpts x schemes, gpos]
+                trimmedGPos = trimmedGPos(~isnan(trimmedGPos));
+                
+                %update sizes
+                obj.sizes.nPixels = size(trimmedWls,1);
+                obj.sizes.nGPos = length(trimmedGPos);
+                
+                %convert spectra back to original dimensions and dim order
+                %[pixels, delays x rpts x schemes, gpos] -> [pixels, delays, rpts, gpos, schemes]
+                trimmedSpectra = reshape(trimmedSpectra,obj.sizes.nPixels,obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nSchemes,obj.sizes.nGPos); %[pixels, delays, rpts, schemes, gpos]
+                trimmedSpectra = permute(trimmedSpectra,[1,2,3,5,4]); %[pixels, delays, rpts, gpos, schemes]
+                
+                %add data back to object
+                obj.wavelengths.data = trimmedWls;
+                obj.spectra.data = trimmedSpectra;
+                obj.gPos = trimmedGPos;
+                
+            else
+                error('Expected all keyword or wavelength range [wl1, wl2] of type double.');
+            end
+            
+            %trim delays
+            if ischar(trim.delays)  %this is a do nothing case
+                % Assert correct input to ensure user isn't accidently doing something they're not aware of
+                assert(strcmp(trim.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
+                
+            elseif isa(trim.delays,'double')   %this does the wavelength trim
+                %ensure the user has correct input before trimming
+                assert(length(trim.delays)==2, 'Expected delay range [d1, d2] of type double.');
+                
+                %find the wavelength range indicies
+                t = reshape(obj.delays.data, obj.sizes.nDelays, []);  %[delays, rpts x gPos]
+                [~,tInd] = nearestVal(t,trim.delays,... %tInd is [2,rpts x gPos]
+                                'unique',false,'trim',false); %keep all values 
+                            
+                %for easy looping, do the following dim rearrangement:
+                %[pixels, delays, rpts, gpos, schemes] -> [delays, pixels x schemes, rpts x gpos]
+                tmpSpectra = permute(obj.spectra.data,[2,1,5,3,4]);
+                tmpSpectra = reshape(tmpSpectra,obj.sizes.nDelays,obj.sizes.nPixels*obj.sizes.nSchems,[]);
+
+                %Allocate NaN double arrays and place spectra values into it 
+                trimmedSpectra = nan(size(tmpSpectra)); %[delays, pixels x schems, rpts x gpos]
+                trimmedDelays = nan(size(t)); %[delays, rpts x gpos]
+                
+                %Unlike wavelengths, the delays should all be similar for all grating positions and repeats,
+                %so there is no flag remove of grating positions or repeats
+                
+                %loop over grating positions and repeats to sub-select range dicated by wlInd
+                for ii = 1:size(tInd,2)
+                    %copy desired subrange for each grating position into the NaN arrays starting from index 1
+                    trimmedDelays(1:length(tInd(1,ii):tInd(2,ii)),ii) = t(tInd(1,ii):tInd(2,ii),ii); %[delays, rpts x gpos]
+                    trimmedSpectra(1:length(tInd(1,ii):tInd(2,ii)),:,ii) = tmpSpectra(tInd(1,ii):tInd(2,ii),:,ii); %[delays, pixels x schems, rpts x gpos]
+                end
+                
+                %remove any dims that are all NaN
+                trimmedDelays = trimmedDelays(any(~isnan(trimmedDelays),2),:); %[delays, rpts x gpos]
+                trimmedSpectra = trimmedSpectra(any(~isnan(trimmedDelays),2),:,:); %[delays, pixels x schems, rpts x gpos]
+                
+                %update sizes
+                obj.sizes.nDelays = size(trimmedDelays,1);
+                
+                %convert spectra back to original dimensions and dim order
+                %[delays, pixels x schemes, rpts x gpos] -> %[pixels, delays, rpts, gpos, schemes]
+                trimmedDelays = reshape(trimmedDelays,obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nGPos); %[delays, rpts, gPos]
+                trimmedSpectra = reshape(trimmedSpectra,obj.sizes.nDelays,obj.sizes.nPixels,obj.sizes.nSchemes,obj.sizes.nRpts,obj.sizes.nGPos); %[delays, pixels, schemes, rpts, gpos]
+                trimmedSpectra = permute(trimmedSpectra,[2,1,4,5,3]); %[pixels, delays, rpts, gpos, schemes]
+                
+                %add data back to object
+                obj.delays.data = trimmedDelays;
+                obj.spectra.data = trimmedSpectra;
+                
+            else
+                error('Expected all keyword or delay range [d1, d2] of type double.');
+            end
+        end
     end
+    
+    
 end

@@ -9,7 +9,7 @@ function [valsOut, indOut] = nearestVal(valsIn,targetVals,varargin)
 % 
 % By default, this function removes duplicate values form valsOut. Extra
 % indicies in valsOut or indOut are set to NaN. If all elements for a
-% targetVal are NaN, then the function also trims the first dim. Note
+% targetVal are NaN, then the function can also trim the first dim. Note
 % that if trim is overriden, the 1st dim of valsOut and indOut
 % correspond to the entries in targetVals.
 %
@@ -20,7 +20,7 @@ function [valsOut, indOut] = nearestVal(valsIn,targetVals,varargin)
 %   The output size of valsOut and ind are:
 %   [nTargetVals, size(valsIn,2), size(valsIn,3), ...]
 %
-% [valsOut, ind] = nearestVal(__,name1,value1,name2,value2,...)
+% [valsOut, ind] = nearestVal(__,name1,value1,name2,value2)
 %   Executes above syntax with additional name-value pair options
 %       'unique' (true) removes any duplicate values found by targetValues
 %           and replaces them with NaN
@@ -28,7 +28,7 @@ function [valsOut, indOut] = nearestVal(valsIn,targetVals,varargin)
 %       'threshold' (0, no threshold) excludes found targetVals that are 
 %           greater than the threshold away from the actual value and 
 %           replaces them with NaN. A threshold of 0 is a flag for no 
-%           threshold.
+%threshold.
     
     %default values for removing duplicates and trimming NaN
     removeDups = true;
@@ -48,13 +48,11 @@ function [valsOut, indOut] = nearestVal(valsIn,targetVals,varargin)
                case 'threshold'
                    threshold = varargin{ii+1};
                otherwise
-                   error([varargin{ii} ' is not a valid argument name.']);
+                   error('Invalid argument name.');
            end             
        end
     end
     
-    %check if any of the double inputs are empty. If not proceed to finding
-    %the nearest vals. If they are empty, return empty arrays.
     if ~isempty(valsIn) || ~isemtpy(targetVals)
     
         %if input is a vector, ensure it is a column
@@ -113,8 +111,7 @@ function [valsOut, indOut] = nearestVal(valsIn,targetVals,varargin)
         %reshape the final values and indices to match the size of valsIn
         indOut = reshape(indOut,[nTargetVals,nValsIn(2:end)]);
         valsOut = reshape(valsOut,[nTargetVals,nValsIn(2:end)]);
-        
-    else %if valsIn or targetVals are empty, return empty arrays
+    else
         indOut = zeros(0);
         valsOut = zeros(0);
     end
