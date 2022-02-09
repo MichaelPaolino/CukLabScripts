@@ -95,4 +95,8 @@ function obj = convertDH(obj, dh_static, dh_array)
     %finally format raw data into final format
     obj.spectra.data = reshape(spectra_tmp, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
     obj.spectra_std.data = reshape(spectrastd_tmp, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
+
+    %Set a default short name, long name, and description
+    obj.desc.description = dh_static.Description;
+
 end

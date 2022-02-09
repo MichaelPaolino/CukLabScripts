@@ -84,11 +84,18 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         function varargout = loadPath(obj,myPath)
             loaded = load(myPath);   %load the path contents 
             contents = fieldnames(loaded);   %get the variables in the loaded data
+            fileName = split(myPath,'\');
+            fileName = fileName{end};
             switch class(loaded.(contents{1}))   %check the variable class
                 case 'struct'    %this should be a data_holder object
                     if strcmp(contents{1},'dh_static') %this is a raw data data_holder
-                        %first try to load with acquisition data holder
+                        %first load with acquisition data holder
                         [varargout{1:nargout}] = convertDH(obj,loaded.dh_static,loaded.dh_array);
+                        
+                        %update name in output objects
+                        for ii = 1:nargout
+                           varargout{ii}.desc.name = fileName; 
+                        end
                     else
                         %return error
                     end
@@ -373,17 +380,20 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             %grating positions will be stitched in pairs sequentially. If
             %there are multiple grating positions, already stitched data
             %will be treated as one grating position
-            tmpWl = wl(:,1);    %holder for concatonated wavelengths starting from 1st grating pos
-            tmpData = data(:,:,1);  %holder for concatonated data starting from 1st grating pos
+            tmpWl = wl(~isnan(wl(:,1)),1);    %holder for concatonated wavelengths starting from 1st grating pos
+            tmpData1 = data(~isnan(wl(:,1)),:,1);  %holder for concatonated data starting from 1st grating pos
             
             for ii = 2:obj.sizes.nGPos %loop over grating positions starting from the 2nd one
+                %remove NaN from next grating position
+                tmpW2 = wl(~isnan(wl(:,ii)),ii); 
+                tmpData2 = data(~isnan(wl(:,ii)),:,ii);
                 
                 %First find overlap region in wavelengths
                 high1 = tmpWl(end);    %highest wavelength in 1st grating position
-                low2 = wl(1,ii);     %lowest wavelength in 2nd grating position
+                low2 = tmpW2(1);     %lowest wavelength in 2nd grating position
                 
                 [low1, low1Ind] = nearestVal(tmpWl,low2); %lowest wavelength and index in 1st grating position
-                [high2, high2Ind] = nearestVal(wl(:,ii),high1); %lowest wavelength and index in 2nd grating position
+                [high2, high2Ind] = nearestVal(tmpW2,high1); %lowest wavelength and index in 2nd grating position
                 
                 %Make sure indicies do not cause data/wavelength extrapolation (overlap region needs to be inclusive)
                 if low1<low2   %check first grating position
@@ -398,15 +408,15 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                 
                 %define lower and upper regions
                 lowWl = tmpWl(1:low1Ind-1); %1st grating positions lower wavelengths
-                highWl = wl(high2Ind+1:end,ii); %2nd grating positions higher wavelengths
-                lowData = tmpData(1:low1Ind-1,:);   %1st grating positions lower data
-                highData = data(high2Ind+1:end,:,ii);   %second grating positoins higher data
+                highWl = tmpW2(high2Ind+1:end); %2nd grating positions higher wavelengths
+                lowData = tmpData1(1:low1Ind-1,:);   %1st grating positions lower data
+                highData = tmpData2(high2Ind+1:end,:);   %second grating positoins higher data
                 
                 %Next interpolate middle region
-                nInd = ceil(0.5*(length(tmpWl(low1Ind:end))+length(wl(1:high2Ind,ii))));    %average number of in-between indicies
+                nInd = ceil(0.5*(length(tmpWl(low1Ind:end))+length(tmpW2(1:high2Ind))));    %average number of in-between indicies
                 midWl = linspace(low1,high2,nInd)';  %new wavelengths in overlap region with linear spacing between them
-                mid1Data = interp1(tmpWl,tmpData,midWl,'linear');   %interpolate 1st grating position on overlap scale
-                mid2Data = interp1(wl(:,ii),data(:,:,ii),midWl,'linear'); %interpolate 2nd grating position on overlap scale
+                mid1Data = interp1(tmpWl,tmpData1,midWl,'linear');   %interpolate 1st grating position on overlap scale
+                mid2Data = interp1(tmpW2,tmpData2,midWl,'linear'); %interpolate 2nd grating position on overlap scale
                 
                 %Execute strategy to combine data in overlap region
                 switch strategy
@@ -427,12 +437,12 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                 end
                 %concatonate the three regions across the 1st (pixel) dimension
                 tmpWl = [lowWl; midWl; highWl]; %store in tmpWl so that it can be fed as 1st grating position in next iteration 
-                tmpData = [lowData; midData; highData]; %store in tmpdata so that it can be fed as 1st grating position in next iteration 
+                tmpData1 = [lowData; midData; highData]; %store in tmpdata so that it can be fed as 1st grating position in next iteration 
             end
             
         %%--Convert wavelengths and data back to original state and update object parameters--%%
             %reshape and permute data back to original dim order
-            data = reshape(tmpData,[],obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nSchemes); %[pixels, delays, rpts, schemes, grating pos]
+            data = reshape(tmpData1,[],obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nSchemes); %[pixels, delays, rpts, schemes, grating pos]
             data = permute(data,[1,2,3,5,4]); %[pixels, delays, rpts, grating pos, schemes]
             
             %update values for object properties

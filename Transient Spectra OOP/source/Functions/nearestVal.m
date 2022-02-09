@@ -85,7 +85,7 @@ function [valsOut, indOut] = nearestVal(valsIn,targetVals,varargin)
             %loop over elements created by extra dims
             for ii = 1:prod(nValsIn(2:end))
                 %update delay values based on index and remove any duplicate values
-                [tmp, ia] = unique(valsIn(ind),'stable');
+                [tmp, ia] = unique(valsIn(ind(:,ii),ii),'stable');
                 valsOut(ia,ii) = tmp;
                 indOut(ia,ii) = ind(ia,ii);
             end
@@ -98,8 +98,10 @@ function [valsOut, indOut] = nearestVal(valsIn,targetVals,varargin)
             end
         end
 
+        %drop values and indicies that are outside of the threshold
         if threshold > 0
-            valsOut(abs(valsOut-targetVals(:))<threshold) = NaN;
+            indOut(abs(valsOut-targetVals(:))>threshold) = NaN;
+            valsOut(abs(valsOut-targetVals(:))>threshold) = NaN;
         end
 
         %remove any rows from valsOut and indOut that are all NaN

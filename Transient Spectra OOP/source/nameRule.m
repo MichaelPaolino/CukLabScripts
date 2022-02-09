@@ -142,6 +142,7 @@ classdef nameRule
                fieldName = varargin{ii}(dotInd+1:end); %get the fieldName
                
                ind = oldObj.search(ruleName);  %get the name index from the old object
+               assert(any(strcmp(fieldName,fields(obj.rules))),[fieldName ' is not a valid field name. Valid fields are ' strjoin(fields(obj.rules),', ') '.']);
                obj.rules(ind).(fieldName) = varargin{ii+1}; %update the rule    
            end
        end
@@ -271,19 +272,22 @@ classdef nameRule
        %
        % obj = increment(obj)
        %   Returns an object with incremented indecies.
-
-          %start by incrementing the most significant index
-          obj.levels(end).ind = obj.levels(end).ind+1;
           
-          %check, starting from the most significant index, that all
-          %indicies are at or below their max value
-          for ii = length(obj.levels):-1:1
-              if obj.levels(ii).ind > obj.levels(ii).max
-                  if ii==1  %required to avoid subindexing 0
-                      obj = obj.reset;
-                  else %reset the current index value to 1 and increment the less significant index
-                      obj.levels(ii).ind = 1;
-                      obj.levels(ii-1).ind = obj.levels(ii-1).ind+1;
+          %check to make sure there are levels to increment
+          if ~isempty(obj.levels)
+              %start by incrementing the most significant index
+              obj.levels(end).ind = obj.levels(end).ind+1;
+
+              %check, starting from the most significant index, that all
+              %indicies are at or below their max value
+              for ii = length(obj.levels):-1:1
+                  if obj.levels(ii).ind > obj.levels(ii).max
+                      if ii==1  %required to avoid subindexing 0
+                          obj = obj.reset;
+                      else %reset the current index value to 1 and increment the less significant index
+                          obj.levels(ii).ind = 1;
+                          obj.levels(ii-1).ind = obj.levels(ii-1).ind+1;
+                      end
                   end
               end
           end

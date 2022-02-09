@@ -11,7 +11,7 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
                       'contours', obj.sizes.nDelays > 1);    %true if multiple delays
     
     %by default, append data to exisitng file
-    appendFile = false;
+    appendFile = true;
                   
     %set default naming options for exported data when there are multiple schemes and grating positions
     nameFlag = struct('shortName', true,... %show the short name
@@ -264,24 +264,14 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
     saveCell = [validNames, {outputStruct.data}']';
     saveStruct = struct(saveCell{:});
     
-    if appendFile && isfile(filePath)   %append file if option is set to true and the file exists
-        %load previous names
+    if appendFile && isfile(filePath)
         saveStrings = load(filePath,'validNames','fullNames');
-        
-        %update name valid and full name list 
-        validNames = [validNames; strsplit(saveStrings.validNames,';')'];
-        fullNames = [fullNames; strsplit(saveStrings.fullNames,';')'];
-        
-        %remove duplicates while keeping name order
-        [validNames,vi] = unique(validNames,'stable');
-        fullNames = fullNames(vi);
-        
-        %update saveStruct and save to file
+        validNames = unique([validNames, strsplit(saveStrings.validNames,';')],'stable');
+        fullNames = [fullNames, strsplit(saveStrings.fullNames,';')];
         saveStruct.validNames = strjoin(validNames,';');
         saveStruct.fullNames = strjoin(fullNames,';');
-        save(filePath,'-struct','saveStruct','-append');        
-    else %save without appending file
-        %update saveStruct and save to file
+        save(filePath,'-struct','saveStruct');        
+    else
         saveStruct.validNames = strjoin(validNames,';');
         saveStruct.fullNames = strjoin(fullNames,';');
         save(filePath,'-struct','saveStruct');

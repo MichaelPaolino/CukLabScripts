@@ -148,13 +148,12 @@ myTR.plotTrace('wavelengths',[380,400,420,440],'no legend');
 %%
 %test trimming data and finding pump wavelength
 myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
-myFSRS = myFSRS.trim('wavelengths',[-1000 3500]);
-myFSRS = myFSRS.stitch();
+myFSRS = myFSRS.trim('wavelengths',[-500 500]);
 myFSRS = myFSRS.findRamanPumpNm(450);
+myFSRS = myFSRS.
 
 figure;
 myFSRS.plotSpectra();
-ylim([-0.5 1]);
 
 %% Export tests
 [~,~,myTR] = loadPath(fsrs(),'Sample_BSP_Air.mat');
@@ -165,6 +164,6 @@ outputStruct = myTR.export('test.mat','wavelengths',[400,425,450]);
 myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
 myFSRS.desc.shortName = 'STO in D2O';
 myFSRS.wavelengths.unit = 'nm';
-outputStruct = myFSRS.export('test.mat','append',true);
+outputStruct = myFSRS.export('test.mat');
 %% All tests pass
 disp('All tests passed!');
