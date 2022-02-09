@@ -147,12 +147,7 @@ myTR.plotTrace('wavelengths',[380,400,420,440],'no legend');
 %% Export tests
 [~,~,myTR] = loadPath(fsrs(),'Sample_BSP_Air.mat');
 myTR.desc.shortName = 'chirp 8 bounces';
-myTR.wavelengths.unit = 'nm';
-outputStruct = myTR.export('test.mat','wavelengths',[400,425,450]);
-%%
-myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
-myFSRS.desc.shortName = 'STO in D2O';
-myFSRS.wavelengths.unit = 'nm';
-outputStruct = myFSRS.export('test.mat');
+outputStruct = myTR.export('');
+
 %% All tests pass
 disp('All tests passed!');

@@ -125,7 +125,7 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
                 for rptInd = 1:obj.sizes.nRpts
                     %update the delay name values to the actual delay values for this repeat and grating position
                     spectraName = spectraName.modify('delay.values',strcat(strtrim(cellstr(num2str(delaySubVal(:,rptInd,gPosInd),3))), ' ', unitStr.wl));
-                    for delayInd = delaySubInds(:,rptInd,gPosInd)'
+                    for delayInd = delaySubInds(:,rptInd,gPosInd)
                         if ~isnan(delayInd)
                             %assign name and data with name autoindexing
                             [waves(cc).name, spectraName] = spectraName.buildName('autoIncrement',true,'delimiter',', '); 
@@ -165,7 +165,7 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
                 %Update the wavelength name values for the actual available wavelengths for the grating position
                 traceName = traceName.modify('wl.values',strcat(strtrim(cellstr(num2str(wlSubVal(:,gPosInd),3))), unitStr.wl));
                 for rptInd = 1:obj.sizes.nRpts
-                    for wlInd = wlSubInds(:,gPosInd)'
+                    for wlInd = wlSubInds(:,gPosInd)
                         if ~isnan(wlInd)    %If the wavelength is outside the grating position it is flagged with NaN
                             %assign name and data with name autoindexing
                             [waves(cc).name, traceName] = traceName.buildName('autoIncrement',true,'delimiter',', '); 
@@ -251,15 +251,13 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
     
     %Convert outputStruct name to structure with field names and save as a
     %file
-    fullNames = {outputStruct.name}';
-    validNames = matlab.lang.makeValidName(fullNames);
+    oldNames = {outputStruct.name}';
+    validNames = matlab.lang.makeValidName(oldNames);
     validNames = matlab.lang.makeUniqueStrings(validNames);
     
-    %build save structure with field names and save to file
-    saveCell = [validNames, {outputStruct.data}']';
-    saveStruct = struct(saveCell{:});
-    saveStruct.validNames = strjoin(validNames,';');
-    saveStruct.fullNames = strjoin(fullNames,';');
-    save(filePath,'-struct','saveStruct');
+    %build save structure with fie
+    saveCell = [validNames, {outputStruct.data}]';
+    saveStruct = struct(saveCell(:));
+    save(filePath,saveStruct);
     
 end

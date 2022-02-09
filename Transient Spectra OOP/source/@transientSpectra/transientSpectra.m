@@ -84,11 +84,18 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         function varargout = loadPath(obj,myPath)
             loaded = load(myPath);   %load the path contents 
             contents = fieldnames(loaded);   %get the variables in the loaded data
+            fileName = split(myPath,'\');
+            fileName = fileName{end};
             switch class(loaded.(contents{1}))   %check the variable class
                 case 'struct'    %this should be a data_holder object
                     if strcmp(contents{1},'dh_static') %this is a raw data data_holder
-                        %first try to load with acquisition data holder
+                        %first load with acquisition data holder
                         [varargout{1:nargout}] = convertDH(obj,loaded.dh_static,loaded.dh_array);
+                        
+                        %update name in output objects
+                        for ii = 1:nargout
+                           varargout{ii}.desc.name = fileName; 
+                        end
                     else
                         %return error
                     end
