@@ -510,7 +510,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         %   Trims both wavelengths and delays as described above.
             
             %define default values
-            trimVals = struct('wls','all',...
+            trim = struct('wls','all',...
                           'delays','all');
             
             %parse varargin
@@ -520,9 +520,9 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                         ['Invalid argument class for name-value pair. Expected class char for name, got ' class(varargin{ii}) '.']);
                     switch varargin{ii}
                         case 'wavelengths'
-                            trimVals.wls = varargin{ii+1};
+                            trim.wls = varargin{ii+1};
                         case 'delays'
-                            trimVals.delays = varargin{ii+1};
+                            trim.delays = varargin{ii+1};
                         otherwise
                             error([varargin{ii} ' is not a valid argument name.']); 
                     end
@@ -530,14 +530,14 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             end
                       
             %trim wavelengths
-            if ischar(trimVals.wls)  %this is a do nothing case
+            if ischar(trim.wls)  %this is a do nothing case
                 % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(trimVals.wls,'all'),'Expected all keyword or wavelength range [wl1, wl2] of type double.');
+                assert(strcmp(trim.wls,'all'),'Expected all keyword or wavelength range [wl1, wl2] of type double.');
                 
-            elseif isa(trimVals.wls,'double')   %this does the wavelength trim
+            elseif isa(trim.wls,'double')   %this does the wavelength trim
                 %ensure the user has correct input before trimming
-                assert(length(trimVals.wls)==2, 'Expected wavelength range [wl1, wl2] of type double.');
-                trimVals.wls = sort(trimVals.wls);  %ensure wavelengths are in increasing order
+                assert(length(trim.wls)==2, 'Expected wavelength range [wl1, wl2] of type double.');
+                trim.wls = sort(trim.wls);  %ensure wavelengths are in increasing order
                 
                 %find the wavelength range indicies in all grating positions
                 wls = obj.wavelengths.data(:);  %[pixels x gPos]
@@ -545,7 +545,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                 wls = sort(wls);
                 
                 %select t subrange within (inclusive) the trim range
-                wls = wls(and(wls>=trimVals.wls(1),wls <= trimVals.wls(2)));
+                wls = wls(and(wls>=trim.wls(1),wls <= trim.wls(2)));
                 
                 %select the object data subset that contains the trimmed t values
                 
@@ -556,14 +556,14 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             end
             
             %trim delays
-            if ischar(trimVals.delays)  %this is a do nothing case
+            if ischar(trim.delays)  %this is a do nothing case
                 % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(trimVals.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
+                assert(strcmp(trim.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
                 
-            elseif isa(trimVals.delays,'double')   %this does the wavelength trim
+            elseif isa(trim.delays,'double')   %this does the wavelength trim
                 %ensure the user has correct input before trimming
-                assert(length(trimVals.delays)==2, 'Expected delay range [d1, d2] of type double.');
-                trimVals.delays = sort(trimVals.delays);    %ensure delays are in increasing order
+                assert(length(trim.delays)==2, 'Expected delay range [d1, d2] of type double.');
+                trim.delays = sort(trim.delays);    %ensure delays are in increasing order
                 
                 %find the wavelength range indicies
                 t = obj.delays.data(:);  %[delays x rpts x gPos]
@@ -571,7 +571,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                 t = sort(t);
                 
                 %select t subrange within (inclusive) the trim range
-                t = t(and(t>=trimVals.delays(1),t <= trimVals.delays(2)));
+                t = t(and(t>=trim.delays(1),t <= trim.delays(2)));
                 
                 %select the object data subset that contains the trimmed t values
                 obj = obj.subset('delays',t);
@@ -740,80 +740,6 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             else
                 error('Expected all keyword or delay array of type double.');
             end
-        end
-        
-        function obj = interp(obj, varargin)
-        %NOT YET IMPLEMENTED
-        
-            %define default values
-            interpVals = struct('wls','all',...
-                          'delays','all');
-            
-            %parse varargin
-            if nargin > 1
-                for ii = 1:2:(nargin-1)
-                    assert(ischar(varargin{ii}),...
-                        ['Invalid argument class for name-value pair. Expected class char for name, got ' class(varargin{ii}) '.']);
-                    switch varargin{ii}
-                        case 'wavelengths'
-                            interpVals.wls = varargin{ii+1};
-                        case 'delays'
-                            interpVals.delays = varargin{ii+1};
-                        otherwise
-                            error([varargin{ii} ' is not a valid argument name.']); 
-                    end
-                end
-            end
-                      
-            %interp wavelengths
-            if ischar(interpVals.wls)  %this is a do nothing case
-                % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(interpVals.wls,'all'),'Expected all keyword or wavelength array of type double.');
-                
-            elseif isa(interpVals.wls,'double')   %this does the wavelength trim
-                %ensure the user has correct input before trimming
-                interpVals.wls = sort(interpVals.wls);  %ensure wavelengths are in increasing order
-                
-                %find the wavelength range indicies in all grating positions
-                wls = obj.wavelengths.data(:);  %[pixels x gPos]
-                wls = wls(~isnan(wls));
-                wls = sort(wls);
-                
-                %select t subrange within (inclusive) the trim range
-                wls = wls(and(wls>=interpVals.wls(1),wls <= interpVals.wls(2)));
-                
-                %select the object data subset that contains the trimmed t values
-                
-                obj = obj.subset('wavelengths',wls);
-                
-            else
-                error('Expected all keyword or wavelength range [wl1, wl2] of type double.');
-            end
-            
-            %trim delays
-            if ischar(interpVals.delays)  %this is a do nothing case
-                % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(interpVals.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
-                
-            elseif isa(interpVals.delays,'double')   %this does the wavelength trim
-                %ensure the user has correct input before trimming
-                assert(length(interpVals.delays)==2, 'Expected delay range [d1, d2] of type double.');
-                interpVals.delays = sort(interpVals.delays);    %ensure delays are in increasing order
-                
-                %find the wavelength range indicies
-                t = obj.delays.data(:);  %[delays x rpts x gPos]
-                t = t(~isnan(t));
-                t = sort(t);
-                
-                %select t subrange within (inclusive) the trim range
-                t = t(and(t>=interpVals.delays(1),t <= interpVals.delays(2)));
-                
-                %select the object data subset that contains the trimmed t values
-                obj = obj.subset('delays',t);
-                
-            else
-                error('Expected all keyword or delay range [d1, d2] of type double.');
-            end            
         end
     end
     

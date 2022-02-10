@@ -127,23 +127,57 @@ xlim([145 147]);
 figure;
 myTR.plotTrace('wavelengths',[350:5:500],'no legend');
 
+%% Test subset data
+%spectra subset
+%Multi-d data dense subset
+myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
+figure;
+myFSRS = myFSRS.subset('wavelengths',-5000:1:5000);
+myFSRS.plotSpectra('no legend');
+
+%Multi-d data sparse subset
+myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
+figure;
+myFSRS = myFSRS.subset('wavelengths',-1000:100:1000);
+myFSRS.plotSpectra('no legend');
+
+%1-d data dense subset
+myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
+figure;
+myFSRS = myFSRS.stitch();
+myFSRS = myFSRS.subset('wavelengths',-5000:1:5000);
+myFSRS.plotSpectra('no legend');
+
+%1-d data sparse subset
+myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
+figure;
+myFSRS = myFSRS.stitch();
+myFSRS = myFSRS.subset('wavelengths',-1000:100:1000);
+myFSRS.plotSpectra('no legend');
+%%
+%delay subset
+[~,~,myTR] = loadPath(fsrs(),'Sample_BSP_Air.mat');
+figure;
+myTR.wavelengths.unit = 'nm';
+myTR = myTR.subset('delays',[90:0.15:147]);
+myTR.plotTrace('wavelengths',[380,400,420,440],'no legend');
+
 %% Test trimming data
 %spectra trim
 myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
 figure;
 myFSRS = myFSRS.trim('wavelengths',[-5000 5000]);
-myFSRS.plotSpectra('no legend');
+myFSRS.plotSpectra('no legend','*');
 myFSRS = myFSRS.trim('wavelengths',[-1000 1000]);
-myFSRS.plotSpectra('no legend');
+myFSRS.plotSpectra('no legend','*');
 
 %delay trim
 [~,~,myTR] = loadPath(fsrs(),'Sample_BSP_Air.mat');
-figure;
-myTR = myTR.trim('delays',[0,1000]);
-myTR.plotTrace('wavelengths',[380,400,420,440],'no legend');
-myTR = myTR.trim('delays',[140,155]);
+figure; hold on;
 myTR.wavelengths.unit = 'nm';
-myTR.plotTrace('wavelengths',[380,400,420,440],'no legend');
+myTR.plotTrace('wavelengths',[380,400,420,440],'no legend','*');
+myTR = myTR.trim('delays',[140,155]);
+myTR.plotTrace('wavelengths',[380,400,420,440],'no legend','*');
 
 %%
 %test trimming data and finding pump wavelength
@@ -161,10 +195,17 @@ ylim([-0.5 1]);
 myTR.desc.shortName = 'chirp 8 bounces';
 myTR.wavelengths.unit = 'nm';
 outputStruct = myTR.export('test.mat','wavelengths',[400,425,450]);
-%%
+assert(length(outputStruct)==6,'Did not generate the correct outputStruct');
+
 myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
 myFSRS.desc.shortName = 'STO in D2O';
 myFSRS.wavelengths.unit = 'nm';
 outputStruct = myFSRS.export('test.mat','append',true);
+assert(length(outputStruct)==6,'Did not generate the correct outputStruct');
+tmpData = load('test.mat');
+assert(length(fields(tmpData))==14,'Did not correctly append export file');
+
+%% Export tests with multiple data sets
+
 %% All tests pass
 disp('All tests passed!');

@@ -90,14 +90,14 @@ function [valsOut, indOut] = nearestVal(valsIn,targetVals,varargin)
             [~,ind(ii,:)] = min(abs(valsIn - targetVals(ii)));
         end
         
-        % Lookup actual values for the found nearest indicies
+        %
+        indOut = ind;
         valsOut = zeros(size(ind));
         for ii = 1:prod(nValsIn(2:end))
             valsOut(:,ii) = valsIn(ind(:,ii),ii);
         end
         
         %drop values and indicies that are outside of the threshold
-        indOut = ind;
         if threshold > 0
             indOut(abs(valsOut-targetVals(:))>threshold) = NaN;
             valsOut(abs(valsOut-targetVals(:))>threshold) = NaN;
@@ -106,24 +106,19 @@ function [valsOut, indOut] = nearestVal(valsIn,targetVals,varargin)
         %loop over other dim's and lookup actual values
         if removeDups %in addition, keep only unique values
             %initialze output matricies as NaN and write unique values to them
-            tmpValsOut = valsOut;
-            tmpIndOut = indOut;
             indOut = NaN(size(ind));    
             valsOut = indOut;
 
             %loop over elements created by extra dims
             for ii = 1:prod(nValsIn(2:end))
                 %update delay values based on index and remove any duplicate values
-                [uniqueValsOut, ia] = unique(tmpValsOut(:,ii),'stable');
-                
-                %remove any indicies that are already NaN from threshold
-                ia = ia(~isnan(ia));
-                uniqueValsOut = uniqueValsOut(~isnan(ia));
-                
-                %Assign unique values and indicies
-                valsOut(ia,ii) = uniqueValsOut;
-                indOut(ia,ii) = tmpIndOut(ia,ii);
+                [tmp, ia] = unique(valsIn(ind(:,ii),ii),'stable');
+                valsOut(ia,ii) = tmp;
+                indOut(ia,ii) = ind(ia,ii);
             end
+
+        else %only do the lookup
+
         end
 
         %remove any rows from valsOut and indOut that are all NaN

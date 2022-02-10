@@ -12,7 +12,8 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
     
     %by default, append data to exisitng file
     appendFile = false;
-                  
+    averageFlag = true;
+    
     %set default naming options for exported data when there are multiple schemes and grating positions
     nameFlag = struct('shortName', true,... %show the short name
                       'scheme', false,...   %show the scheme name
@@ -24,7 +25,7 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
     
     %define subsets
     wlSub = []; %wavelength subset to plot traces
-    delaySub = [];      %delay subset to plot spectra
+    delaySub = 0;      %delay subset to plot spectra
     
     %parse varargin
     if nargin > 2
@@ -42,6 +43,8 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
                     nameFlag.delay = true;
                 case 'contours' %user wants to change plot contours setting
                     saveFlag.contours = varargin{ii+1}; %update contour save flag
+                case 'average'  %user wants to change default average behavior
+                    averageFlag = varargin{ii+1};
                 case 'append'   %user wants to change append to file setting
                     appendFile = varargin{ii+1};    
                 otherwise
@@ -50,6 +53,12 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
         end
     end
     
+    %average over repeats before exporting
+    if averageFlag
+        obj = obj.average();
+    end
+    
+    %number of wavelengths and delays to save for traces and spectra
     nSubWls = length(wlSub);
     nSubDelays = length(delaySub);
     
