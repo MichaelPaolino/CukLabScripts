@@ -82,7 +82,7 @@ myFSRS.plotSpectra();
 ylim([-0.3 1]);
 xlim([-500 4000]);
 
-myFSRS = myFSRS.findRamanPumpNm(450);
+myFSRS = myFSRS.findRamanPumpNm('pump guess',400);
 figure;
 myFSRS.plotSpectra();
 ylim([-0.3 1]);
@@ -90,7 +90,7 @@ xlim([-1000 3500]);
 
 %% test stiching multiple grating positions
 myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
-myFSRS = myFSRS.findRamanPumpNm(450);
+myFSRS = myFSRS.findRamanPumpNm();
 
 figure; hold on;
 myFSRS2 = myFSRS.stitch('average');
@@ -179,16 +179,23 @@ myTR.plotTrace('wavelengths',[380,400,420,440],'no legend','*');
 myTR = myTR.trim('delays',[140,155]);
 myTR.plotTrace('wavelengths',[380,400,420,440],'no legend','*');
 
-%%
 %test trimming data and finding pump wavelength
 myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
 myFSRS = myFSRS.trim('wavelengths',[-1000 3500]);
 myFSRS = myFSRS.stitch();
-myFSRS = myFSRS.findRamanPumpNm(450);
+myFSRS = myFSRS.findRamanPumpNm();
 
 figure;
 myFSRS.plotSpectra();
 ylim([-0.5 1]);
+
+%% Test interpoalting data
+myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
+myFSRS = myFSRS.findRamanPumpNm();
+myFSRS = myFSRS.interp('wavelengths',-1000:1:1000);
+
+figure;
+myFSRS.plotSpectra();
 
 %% Export tests
 [~,~,myTR] = loadPath(fsrs(),'Sample_BSP_Air.mat');

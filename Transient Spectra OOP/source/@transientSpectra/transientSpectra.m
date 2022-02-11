@@ -744,7 +744,6 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         
         function obj = interp(obj, varargin)
         %NOT YET IMPLEMENTED
-        
             %define default values
             interpVals = struct('wls','all',...
                           'delays','all');
@@ -766,54 +765,98 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             end
                       
             %interp wavelengths
-            if ischar(interpVals.wls)  %this is a do nothing case
+            if ischar(interpVals.wls) && ischar(interpVals.delays)  %this is a do nothing case
                 % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(interpVals.wls,'all'),'Expected all keyword or wavelength array of type double.');
+                assert(strcmp(interpVals.wls,'all') && strcmp(interpVals.delays,'all'),...
+                    'Expected all keyword or wavelength array of type double.');
                 
-            elseif isa(interpVals.wls,'double')   %this does the wavelength trim
+            elseif isa(interpVals.wls,'double') && ischar(interpVals.delays)   %this does the wavelength trim       
                 %ensure the user has correct input before trimming
-                interpVals.wls = sort(interpVals.wls);  %ensure wavelengths are in increasing order
+                assert(isvector(interpVals.wls),'Wavelengths must be a vector');
                 
-                %find the wavelength range indicies in all grating positions
-                wls = obj.wavelengths.data(:);  %[pixels x gPos]
-                wls = wls(~isnan(wls));
-                wls = sort(wls);
+                %load wavelengths
+                wls = obj.wavelengths.data; %[wls, gpos]
                 
-                %select t subrange within (inclusive) the trim range
-                wls = wls(and(wls>=interpVals.wls(1),wls <= interpVals.wls(2)));
+                %ensure wavelengths are in increasing order and within the 
+                %available wavelength range. For now, extrapolation is not allowed
+                interpVals.wls = sort(interpVals.wls);
+                interpVals.wls = interpVals.wls(and(interpVals.wls>min(wls(:)),interpVals.wls<max(wls(:))));
+                nInterpWls = length(interpVals.wls);
                 
-                %select the object data subset that contains the trimmed t values
+                %for easy looping, do the following dim rearrangement:
+                %[pixels, delays, rpts, gpos, schemes] -> [pixels, delays x rpts x schemes, gpos]
+                tmpSpectra = permute(obj.spectra.data,[1,2,3,5,4]);
+                tmpSpectra = reshape(tmpSpectra,obj.sizes.nPixels,[],obj.sizes.nGPos);
                 
-                obj = obj.subset('wavelengths',wls);
+                %Allocate NaN double arrays and place spectra values into it 
+                interpSpectra = zeros([nInterpWls,size(tmpSpectra,2),obj.sizes.nGPos]); %[interp pixels, delays x rpts x schemes, gpos]
+                interpWls = nan([nInterpWls,obj.sizes.nGPos]); %[interp pixels, gpos]
+               
+                %loop over grating positions to sub-select range dicated by wlInd
+                for ii = 1:obj.sizes.nGPos
+                    %Interpolate for each grating position, which will have different wavelengths
+                    isWlNaN = isnan(wls(:,ii)); %flag wavelengths that are NaN. interp1 requires numeric input (no NaN)
+                    interpSpectra(:,:,ii) = interp1(wls(~isWlNaN,ii),tmpSpectra(~isWlNaN,:,ii),interpVals.wls);
+                    
+                    %Find values that were not set to NaN for extrapolation
+                    isInterpWlNaN = all(isnan(interpSpectra(:,:,ii)),2);
+                    interpWlsNoNaN = interpVals.wls(~isInterpWlNaN);
+                    
+                    %copy desired subrange for each grating position into the NaN arrays starting from index 1
+                    interpWls(1:length(interpWlsNoNaN),ii) = interpWlsNoNaN;
+                    interpSpectra(1:length(interpWlsNoNaN),:,ii) = interpSpectra(~isInterpWlNaN,:,ii);
+                end
+                
+                %remove any dims that are all NaN. This happens when not all interpWls were used 
+                %between two different grating positions
+                isWlNaN = all(isnan(interpWls),2); %all wls are NaN for each gpos, delay, rpt, and scheme
+                isGPosNaN = all(isnan(interpWls),1); %all wls are NaN for each wl, delay, rpt, and scheme
+                interpWls = interpWls(~isWlNaN,~isGPosNaN); %[wls, gpos]
+                interpSpectra = interpSpectra(~isWlNaN,:,~isGPosNaN); %[pixels, delays x rpts x schemes, gpos]
+                trimmedGPos = obj.gPos(~isGPosNaN);
+                
+                %update sizes
+                obj.sizes.nPixels = size(interpWls,1);
+                obj.sizes.nGPos = length(trimmedGPos);
+                
+                %convert spectra back to original dimensions and dim order
+                %[pixels, delays x rpts x schemes, gpos] -> [pixels, delays, rpts, gpos, schemes]
+                interpSpectra = reshape(interpSpectra,obj.sizes.nPixels,obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nSchemes,obj.sizes.nGPos); %[pixels, delays, rpts, schemes, gpos]
+                interpSpectra = permute(interpSpectra,[1,2,3,5,4]); %[pixels, delays, rpts, gpos, schemes]
+                
+                %add data back to object
+                obj.wavelengths.data = interpWls;
+                obj.spectra.data = interpSpectra;
+                obj.gPos = trimmedGPos;
                 
             else
                 error('Expected all keyword or wavelength range [wl1, wl2] of type double.');
             end
             
-            %trim delays
-            if ischar(interpVals.delays)  %this is a do nothing case
-                % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(interpVals.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
-                
-            elseif isa(interpVals.delays,'double')   %this does the wavelength trim
-                %ensure the user has correct input before trimming
-                assert(length(interpVals.delays)==2, 'Expected delay range [d1, d2] of type double.');
-                interpVals.delays = sort(interpVals.delays);    %ensure delays are in increasing order
-                
-                %find the wavelength range indicies
-                t = obj.delays.data(:);  %[delays x rpts x gPos]
-                t = t(~isnan(t));
-                t = sort(t);
-                
-                %select t subrange within (inclusive) the trim range
-                t = t(and(t>=interpVals.delays(1),t <= interpVals.delays(2)));
-                
-                %select the object data subset that contains the trimmed t values
-                obj = obj.subset('delays',t);
-                
-            else
-                error('Expected all keyword or delay range [d1, d2] of type double.');
-            end            
+%             %trim delays
+%             if ischar(interpVals.delays)  %this is a do nothing case
+%                 % Assert correct input to ensure user isn't accidently doing something they're not aware of
+%                 assert(strcmp(interpVals.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
+%                 
+%             elseif isa(interpVals.delays,'double')   %this does the wavelength trim
+%                 %ensure the user has correct input before trimming
+%                 assert(length(interpVals.delays)==2, 'Expected delay range [d1, d2] of type double.');
+%                 interpVals.delays = sort(interpVals.delays);    %ensure delays are in increasing order
+%                 
+%                 %find the wavelength range indicies
+%                 t = obj.delays.data(:);  %[delays x rpts x gPos]
+%                 t = t(~isnan(t));
+%                 t = sort(t);
+%                 
+%                 %select t subrange within (inclusive) the trim range
+%                 t = t(and(t>=interpVals.delays(1),t <= interpVals.delays(2)));
+%                 
+%                 %select the object data subset that contains the trimmed t values
+%                 obj = obj.subset('delays',t);
+%                 
+%             else
+%                 error('Expected all keyword or delay range [d1, d2] of type double.');
+%             end            
         end
     end
     

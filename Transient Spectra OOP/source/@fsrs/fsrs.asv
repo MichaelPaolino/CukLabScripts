@@ -100,31 +100,8 @@ classdef fsrs < transientSpectra
             %   obj: the fsrs object with updated pump wavelength and raman shift units
             %   pumpNm: the nm value of the new pump wavelength
             
-            %Default parameters
             pumpGuessNm = obj.ramanPumpNm;    %initial guess for search in nm
             thresholdNm = 10; %+/- search range around initial guess in nm
-            dropGPos = [];  %grating positions to automatically exclude
-            
-            %parse varargin
-            if nargin > 1
-                for ii = 1:2:(nargin-1)
-                    assert(ischar(varargin{ii}),...
-                        ['Invalid argument class for name-value pair. Expected class char for name, got ' class(varargin{ii}) '.']);
-                    switch varargin{ii}
-                        case 'pump guess'
-                            assert(isscalar(varargin{ii+1}),'Expected a scalar value for pump nm guess');
-                            pumpGuessNm = varargin{ii+1};
-                        case 'threshold'
-                            assert(isscalar(varargin{ii+1}),'Expected a scalar value for threshold');
-                            thresholdNm = varargin{ii+1};
-                        case 'drop'
-                            dropGPos = varargin{ii+1};
-                            assert(isvector(varargin{ii+1}),'Expected a vector for drop grating positions');
-                        otherwise
-                            error([varargin{ii} ' is not a valid argument name.']); 
-                    end
-                end
-            end
             
             %remember old units
             tmpUnits = cell(3,1);
@@ -144,10 +121,7 @@ classdef fsrs < transientSpectra
             lambda = subObj.wavelengths.data(:,gInd);
             
             %find the raman pump peak (should be strongest signal)
-            [maxVal,maxInd] = max(data);
-            
-            %find peak base (should be close to lowest signal)
-            minVal = min(data);
+            [val,maxInd] = max(data);
             
             %find pump peak fwhm while looping over sorted grating positions that do not get dropped
             pumpNm = NaN*zeros(1,subObj.sizes.nGPos);
@@ -156,7 +130,7 @@ classdef fsrs < transientSpectra
                 if ~any(dropGPos == gPosSorted(ii))
                     %find all "fwhm" intercepts in data. Sort in case lambda nm values
                     %are not sorted in ascending order.
-                    intVals = sort(findGridIntercepts(lambda(:,ii),data(:,ii),minVal(ii)+(maxVal(ii)-minVal(ii))/2));
+                    intVals = sort(findGridIntercepts(lambda(:,ii),data(:,ii),val(ii)/2));
 
                     %Use the maximum point as an initial guess
                     pumpNm(ii) = lambda(maxInd(ii),ii);
@@ -176,8 +150,7 @@ classdef fsrs < transientSpectra
             %average the results over non-dropped grating positions
             pumpNm = mean(pumpNm(~isnan(pumpNm)));
             
-            %make sure pumpNm is not NaN or empty before assigning value
-            assert(~isempty(pumpNm) && ~isnan(pumpNm),['Failed to find center wavelength for' obj.desc.name]);
+            assert(~isempty(pumpNm) && ~isnan(pumpNm),'Failed to find center wavelength');
             
             %update the raman pump wavelength
             obj.ramanPumpNm = pumpNm;
