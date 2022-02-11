@@ -1,6 +1,58 @@
-%export the object data to file
-function [outputStruct, filePath] = export(obj,filePath,varargin)
-    
+function outputStruct = export(obj,filePath,varargin)
+% EXPORT object data to igor pro using an igor importable .mat file
+% This method converts object spectra, wavelengths, and delays into matrix
+% and wave data and saves it to a .mat file. The name of each matrix or
+% column vector in the .mat file determines the name of the matrix or wave
+% in the igor project. 
+%
+% The base name for each matrix or wave is determined by obj.desc.shortName
+% and the type of matrix/wave that is being saved, e.g. matrix, spectra, 
+% trace, wavelength, or delays. When multiple matricies or waves have the
+% same base name, the names are made unique by automatically suffixing the 
+% scheme, grating position, repeat, wavelength, and/or delay.
+%
+% By default, export saves matricies along with their delay and wavelength
+% waves for data that contains multiple delays or a spectra wave along with
+% its wavelength wave if there is only one delay. If the object contains
+% multiple grating positions, each grating position gets a unique set of
+% matricies or waves. If the object contains multiple repeats, the repeats
+% are averaged together. These defaults can be overriden.
+%
+% The user also has the option to export kinetic traces and spectra using
+% the 'kinetics', [wavelengths] and/or 'spectra', [delays] name-value
+% pairs. 
+%
+% If exporting multiple objects in a loop, use the 'append', true name-
+% value pair to append data to the same file.
+%
+% obj.EXPORT(filePath)
+%   Exports the spectra, delays, and wavelengths inside obj to path
+%   filePath in an igor-pro understandable format with default options,
+%   as described.
+%
+% obj.EXPORT(filePath,'name1','value1','name2','value2',...)
+%   Exports object data to filePath with options set by name-value pairs:
+%   'kinetics', [wlVect]: additionaly exports kinetic traces as a function
+%       of delay for wavelengths specified by wlVect (vector type double).
+%       By default, kinetic traces are not exported.
+%   'spectra', [delayVect]: additionaly exports spectra as a function of
+%       wavelength for delays specified by delayVect (vector type double).
+%       By default, spectra are not exported unless there is only one
+%       delay.
+%   'contours', flag: Logical flag on whether to export matrix data. The 
+%       default is true unless there is only one delay.
+%   'average', flag: Logical flag on whether to average together repeats.
+%       The default is true.
+%   'append', flag: Logical flag on whether to append saved matricies or 
+%       waves to an existing .mat file. If the .mat file does not yet
+%       exist, a new file is created. If the .mat file exists and has waves
+%       or matricies with the same name as those being saved, the matricies
+%       or waves will be replaced. The default value is false.
+%
+% outputStruct = obj.EXPORT(__)
+%   Returns a structure containing the full (non-valid) name and data for 
+%   each matrix and wave that is saved
+
     %set default export options for data. By default either a contour is
     %saved along with its wavelengths and delays or a spectra (wave) is
     %saved along with its wavelengths. The user can override these options.
@@ -33,11 +85,11 @@ function [outputStruct, filePath] = export(obj,filePath,varargin)
             assert(ischar(varargin{ii}),...
                 ['Invalid argument class for name-value pair. Expected class char for name, got ' class(varargin{ii}) '.']);
             switch varargin{ii}
-                case 'wavelengths'  %User wants a subset of wavelengths to plot traces
+                case 'kinetics'  %User wants a subset of wavelengths to plot traces
                     wlSub = varargin{ii+1}; %update wavelength subset
                     saveFlag.traces = true; %set save traces flag to true
                     nameFlag.wl = true;
-                case 'delays' %User wants a subset of delays to plot spectra
+                case 'spectra' %User wants a subset of delays to plot spectra
                     delaySub = varargin{ii+1}; %update delay subset
                     saveFlag.spectra = true;   %set save spectra flag to true
                     nameFlag.delay = true;

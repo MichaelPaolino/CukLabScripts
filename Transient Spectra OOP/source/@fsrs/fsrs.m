@@ -85,21 +85,37 @@ classdef fsrs < transientSpectra
     % Methods specific to the fsrs class that cannot be implemented in the transientSpectra class
     methods
         
-        %Attempt to automatically find the raman pump wavelength
         function [obj, pumpNm] = findRamanPumpNm(obj, varargin)
-            %Automatically finds the raman pump wavelength by trying two strategies: 
-            %1) take the maximum point in each grating position in the fsrs object. 
-            %2) try to resolve a peak and take the half way point of the fwhm as the 
-            %   pump wavelelngth. 
-            %The final pump wavelength is the average of all valid grating positions.
-            %
-            %Inputs:
-            %   dropGPos: user input for grating positions that do not have an obvious 
-            %   raman peak. todo: find automated way and make input optional
-            %Outputs:
-            %   obj: the fsrs object with updated pump wavelength and raman shift units
-            %   pumpNm: the nm value of the new pump wavelength
-            
+        % FINDRAMANPUMPNM automatically finds the raman pump wavelength in nm.
+        % The algorithm works by searching a wavelength region defined by guess +/- 
+        % threshold and searching for the maximum point. Because the fundamental
+        % peak is an image of the pump scatter on the spectrometer slit, it does 
+        % not have a clean shape. Instead of fitting the peak, the algroithm 
+        % attempts to determine the peak center by its FWHM. If the FWHM cannot be 
+        % resolved, the algorithm takes the maximum point as the center. The final 
+        % pump wavelength is the average over all valid grating positions.
+        %
+        % By default, the guess wavelength is obj.ramanPumpNm and the threshold is
+        % 10 nm. These defaults can be overriden. Note: the search is performed in
+        % nm units, but the output object will have the same units as the input.
+        %
+        % obj = obj.FINDRAMANPUMPNM()
+        %   Search and update the raman pump center wavelength (nm) using the
+        %   default search region of obj.ramanPumpNm +/- 10 nm.
+        %
+        % obj = obj.FINDRAMANPUMPNM('name1', value1, 'name2', value2,...)
+        %   Search and update the raman pump center wavelength (nm) with options
+        %   set by name-value pair. Name-value paris are:
+        %   'pump guess', newGuess: double newGuess updates the search region
+        %       center to newGuess +/- threshold, where threshold defaults to 10 nm
+        %   'threshold', newThresh: double newThresh updates the search region
+        %       range to currentGuess +/- newThresh, where currentGuess defaults to
+        %       obj.ramanPumpNm
+        %   'drop', dropVector: double dropVector contains grating positions that
+        %       are force-excluded from the raman pump wavelength search. By
+        %       default, all gratings that overlap with the search range are
+        %       searched.
+           
             %Default parameters
             pumpGuessNm = obj.ramanPumpNm;    %initial guess for search in nm
             thresholdNm = 10; %+/- search range around initial guess in nm
@@ -118,8 +134,8 @@ classdef fsrs < transientSpectra
                             assert(isscalar(varargin{ii+1}),'Expected a scalar value for threshold');
                             thresholdNm = varargin{ii+1};
                         case 'drop'
-                            dropGPos = varargin{ii+1};
                             assert(isvector(varargin{ii+1}),'Expected a vector for drop grating positions');
+                            dropGPos = varargin{ii+1};
                         otherwise
                             error([varargin{ii} ' is not a valid argument name.']); 
                     end

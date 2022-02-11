@@ -326,9 +326,9 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
     methods
         %stitches all grating positions together
         function obj = average(obj)
-        % Average all repeats
+        % AVERAGE all repeats
         %
-        % obj = obj.average()
+        % obj = obj.AVERAGE()
         %   Averages all repeats for obj.spectra, obj.spectra_std, obj.delays and
         %   updates obj.sizes
 
@@ -343,7 +343,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         end
         
         function obj = stitch(obj,varargin)
-        % Stitch together available grating positions in object. 
+        % STITCH together available grating positions in object. 
         % This works by sorting the data in ascending wavelength and stitching a 
         % pair of grating positions at a time. For multiple grating positions, 
         % the previously stitched grating position is treated as the first grating 
@@ -355,11 +355,11 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         % todo: update spectra_std. 
         % todo: may need to create a case for direct stitching
         %
-        % obj = obj.stitch()
+        % obj = obj.STITCH()
         %   Stitches all grating positions using the default strategy of linear.
         %   Updates obj.spectra, obj.delays, obj.wavelengths, and obj.sizes
         %
-        % obj = obj.stitch(strategy)
+        % obj = obj.STITCH(strategy)
         %   Same as the obj.stitch call but with specified strategy. The strategy
         %   input is type char. Choose from 'average', 'lower', 'upper', 'half', 
         %   and 'linear'.
@@ -478,7 +478,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         end
         
         function obj = trim(obj, varargin)
-        % Trims the specra wavelengths and/or delays to the specified range.
+        % TRIM the specra wavelengths and/or delays to the specified range.
         % This function keeps data within the specified range and replaces data
         % outside the specified ranges with NaN. If all wavelengths or delays are
         % removed for the rpt, gpos, or scheme dimension, then the sizes of the
@@ -487,25 +487,25 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         % 'delays, [lower, upper]. By default, 'w' and 'delays' are set to 'all', 
         % which does not trim the dimensions.
         % 
-        % obj = obj.trim()
+        % obj = obj.TRIM()
         %   This call does nothing because the default values for 'wavelengths' and
         %   'delays' is 'all'.
         %
-        % obj = obj.trim('wavelengths',[lowerWl,upperWl])
+        % obj = obj.TRIM('wavelengths',[lowerWl,upperWl])
         %   Trims the wavelengths to be between lowerWl and upperWl for all grating
         %   positions, repeats, delays, and schemes. With multiple grating
         %   positions, trimmed data is replaced with NaN. Data size is adjsuted to
         %   remove extra NaN values.
         %
-        % obj = obj.trim('delays',[lowerDelay,upperDelay])
+        % obj = obj.TRIM('delays',[lowerDelay,upperDelay])
         %   Trims the delays to be between lowerWl and upperWl. Delays are assumed
         %   to be nominally the same for all repeats, grating positions, and
         %   schemes. Trimmed data is replaced with NaN, but usually the data size
         %   is adjusted to remove the extra NaN values.
         % 
-        % obj = obj.trim('wavelengths',[lowerWl,upperWl],...
+        % obj = obj.TRIM('wavelengths',[lowerWl,upperWl],...
         %                'delays',[lowerDelay,upperDelay])
-        % obj = obj.trim('delays',[lowerDelay,upperDelay],...
+        % obj = obj.TRIM('delays',[lowerDelay,upperDelay],...
         %                'wavelengths',[lowerWl,upperWl])
         %   Trims both wavelengths and delays as described above.
             
@@ -582,7 +582,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         end
         
         function obj = subset(obj, varargin)
-        % Returns a subset closest to the input target ranges.
+        % SUBSET Returns a subset object closest to the input target ranges.
         % This function returns an object with data limited to the wavelengths and
         % delays closest to the target ranges. If the user desires a subset with
         % wavelength and delay values that exactly match the input ranges, use the
@@ -595,24 +595,24 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         % 'wls' and 'delays' are set to 'all' which does not change the the 
         % elements of the selected dimensions.
         % 
-        % obj = obj.subset)
+        % obj = obj.SUBSET()
         %   This call does nothing because the default values for 'wavelegnths' and
         %   'delays' is 'all'.
         %
-        % obj = obj.subset('wavelengths',wlArray)
+        % obj = obj.SUBSET('wavelengths',wlArray)
         %   Returns a subset of the obj data with wavelengths closest to wlArray 
         %   for all grating positions, repeats, delays, and schemes. With multiple 
         %   grating positions, extra wavelength data is replaced with NaN. Data 
         %   size is adjsuted to remove extra NaN values.
         %
-        % obj = obj.subset('delays',tArray)
+        % obj = obj.SUBSET('delays',tArray)
         %   Returns a subset of the obj data with delays closest to tArray 
         %   for all grating positions, repeats, delays, and schemes. Extra delays 
         %   are replaced with NaN, but usually the data size is adjusted to remove 
         %   the extra NaN values.
         % 
-        % obj = obj.subset('wavelengths',wlArray,'delays',tArray)
-        % obj = obj.subset('delays',tArray,'wavelengths',wlArray)
+        % obj = obj.SUBSET('wavelengths',wlArray,'delays',tArray)
+        % obj = obj.SUBSET('delays',tArray,'wavelengths',wlArray)
         %   Returns a subset of both wavelengths and delays as described above.    
             
             %define default values

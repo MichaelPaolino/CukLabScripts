@@ -201,7 +201,7 @@ myFSRS.plotSpectra();
 [~,~,myTR] = loadPath(fsrs(),'Sample_BSP_Air.mat');
 myTR.desc.shortName = 'chirp 8 bounces';
 myTR.wavelengths.unit = 'nm';
-outputStruct = myTR.export('test.mat','wavelengths',[400,425,450]);
+outputStruct = myTR.export('test.mat','kinetics',[400,425,450]);
 assert(length(outputStruct)==6,'Did not generate the correct outputStruct');
 
 myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
