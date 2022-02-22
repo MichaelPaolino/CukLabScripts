@@ -1,4 +1,4 @@
-classdef transientSpectra < matlab.mixin.Heterogeneous
+classdef transientSpectra
 	properties
         %raw data
         spectra = doubleWithUnits();  %[pixels, delays, rpts, grating pos, schemes]
@@ -7,10 +7,10 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         delays = doubleWithUnits();   %[delays, repeats, grating pos]
         gPos = zeros(); %[]
         
-        %identifying information: todo (?): convert to calss
-        desc = struct('name', '',...
-                      'shortName', '', ...
-                      'description', '');
+        %identifying information: todo (?): convert to class
+        name = '';
+        shortName = '';
+        description = '';
                          
         schemes = {}; %list of data schemes
                          
@@ -18,16 +18,16 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         %todo: convert to class so that display method calls can auto parse
         %varargin and return an updated  cosmetics object that can 
         %auto-convert data and auto-update axis labels
-        cosmetic = struct('pixelUnits','nm',...
-                          'signalUnits','OD',...
-                          'delayUnits','ps',...
-                          'pixelLimits',[0,0],...
-                          'delayLimits',[0,0],...
-                          'targetScheme',1);
-        
-        baseUnits = struct('pixels','nm',...
-                           'delay','ps',...
-                           'signal','OD');
+%         cosmetic = struct('pixelUnits','nm',...
+%                           'signalUnits','OD',...
+%                           'delayUnits','ps',...
+%                           'pixelLimits',[0,0],...
+%                           'delayLimits',[0,0],...
+%                           'targetScheme',1);
+%         
+%         baseUnits = struct('pixels','nm',...
+%                            'delay','ps',...
+%                            'signal','OD');
         
         %size information
         sizes = struct('nRpts', 0, ...
@@ -35,6 +35,10 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                        'nSchemes', 0, ...
                        'nDelays', 0, ...
                        'nPixels', 0);
+    end
+    
+    properties %(Access = protected)
+       isDefault = true; 
     end
     
     %methods that children classes must implement:
@@ -53,33 +57,364 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
         %transientSpectra(); initialize default FSRS object
         %transientSpectra(path); load data holder object or structs from path and
         %   convert to 
-        
-           switch nargin    %number of input arguments for the constructor call
-               case 0   %constructs a default object --do nothing
-               case 1   %one argument is either a path or a data_holder object
-                   argClass = class(varargin{1});   %determines input class
-                   switch argClass
-                       case 'char'  %char class, meaning a path
-                           obj = loadPath(obj,varargin{1});
-                       case 'data_holder'   %data_holder class
-                           %call load routine for a data_holder
-                       otherwise    %invalid input class
-                           %return an error
-                   end
-                   
-               case 2   %user manually input dh_static and dh_array
-                   %expected input type is a pair of structs
-                   if isstruct(varargin{1}) && isstruct(varargin{2})
-                       %build data_holder and call load routine for a
-                       %data_holder
-                   else     %invalid type
-                       %return an error
-                   end
-               otherwise
-                   %return an error
+           
+        %%--PREFORMAT INPUT ARGS--%%
+           %To support object arrays, inputs classes will be queried as
+           %elements of cell arrays. If the input is not a cell array,
+           %convert it to a cell array first.
+           for ii = 1:nargin %loop over arguments
+               if ~iscell(varargin{ii}) %if argument is not already a scell
+                   varargin{ii} = {varargin{ii}}; %convert non-cell varargin elements to cell
+               end
            end
+        
+        %%--BUILD OBJECT--%%
+           if nargin==0 %constructs a default object --do nothing  
+               
+           else %data is available, build non-default object
+           %%--COPY DATA INTO OBJECT ARRAY--%%       
+               argSize = size(varargin{1});      %determine input cell array size, this will be the object array size
+               argNumel = numel(varargin{1});    %for easy looping, loop over elements of arguments
+               argInd = 1;  %keep track of which argument is being parsed
+               
+               argCell = varargin{argInd}(:);
+               
+               %first set of inputs are data containing. Parse these first before name-value paris
+               if ischar(varargin{argInd}{1}) && argInd == 1   %file path load routine
+                   %initialize object by loading path
+                   obj(argNumel) = loadPath(obj(1),argCell{argNumel});  %todo: loop inside loadPath?
+                   for objInd = 1:argNumel-1
+                      obj(objInd) = loadPath(obj(objInd),argCell{objInd});
+                   end
+                   argInd = argInd + 1;
+               elseif isa(varargin{argInd}{1},'data_holder')    %data holder object load routine
+                   argInd = argInd + 1;
+               elseif isa(varargin{argInd}{1},'transientSpectra')   %conversion from child object to this class
+                   argInd = argInd + 1;
+               elseif isstruct(varargin{argInd}{1}) && nargin > 1   %dh_static and dh_array load routine
+                   argInd = argInd + 2;
+               else    %invalid 1st argument
+                   error(['1st argument must pass data to object. Allowed data classes are an element ',...
+                          'or cell array of: char, data_holder, struct, or transientSpectra. Got ',...
+                          class(varargin{argInd}{1}) '.']);
+               end
+               
+               %If data has been loaded succesfully, set each element default object flag to false
+               [obj(:).isDefault] = deal(false);
+               
+           %%--PARSE KEYWORDS AND NAME_VALUE PAIRS--%%
+               while argInd <= nargin
+                   assert(ischar(varargin{argInd}{1}),['Expected element or cell array of chars for ',...
+                          'keywords or name-value pairs. Got ' class(varargin{argInd}{1}) '.']);
+                   switch varargin{argInd}{1}
+                       case 'short name'
+                           assert(argInd+1<=nargin,'Name-value pair short name requires an additional char input');
+                           assert(ischar(varargin{argInd+1}{1}),'Name-value pair short name requires an additional',...
+                                  ' char or cell array of char input.');
+                           assert(numel(varargin{argInd+1})==argNumel,['The number of short names must',...
+                                  'match the number of objects. Expected ' num2str(argNumel) ' elements, got ',...
+                                   num2str(numel(varargin{argInd+1})) ' elements.']);
+                               
+                           %assign array of arguments directly using deal
+                           [obj(:).shortName] = deal(varargin{argInd+1}{:});
+                           argInd = argInd + 2;
+                       otherwise %throw error to avoid infinite loop
+                           error([varargin{argInd}{1} ' is an unsupported keyword or name-value pair.']);
+                   end %switch
+               end %while
+               
+           %%--FINAL OBJECT FORMATTING--%%
+               %reshape object to match input array shape
+               obj = reshape(obj,argSize);
+               
+           end %nargin
+        end %constructor
+               
+        % EXPORT the object data to an igor compatible .mat file
+        [outputStruct, filePath] = export(obj,filePath,varargin)
+        
+        %%**GET-SET METHODS**%%
+        %Data units
+        function obj = setUnits(obj,wavelengthUnit,delayUnit,spectraUnit)
+        % SETUNITS sets the units for the wavelengths, delays, and spectra.
+        % Use an empty char array, [] or '', as a flag to skip changing the unit.
+        % Changing the unit updates the numeric values in the relavent arrays.
+        %
+        % obj = obj.SETUNITS(wavelengthUnit,delayUnit,spectraUnit)
+        %   Changes the units for wavelengths, delays, and spectra
+        %
+        % obj = obj.SETUNITS([],[],spectraUnit)
+        %   Changes the units for spectra only. Any combination of brakets is
+        %   allowed to select which units need to be changed.
+           
+           % Formtat object array dims into a column for easy looping
+           objSize = size(obj);
+           objNumel = numel(obj);
+           obj = obj(:);
+           
+           %loop through each object and update units
+           for objInd = 1:objNumel
+               if ~isempty(wavelengthUnit)
+                   obj(objInd).wavelengths.unit = wavelengthUnit;
+               end
+
+               if ~isempty(delayUnit)
+                   obj(objInd).delays.unit = delayUnit;
+               end
+
+               if ~isempty(spectraUnit)
+                   obj(objInd).spectra.unit = spectraUnit;
+                   obj(objInd).spectra_std.unit = spectraUnit;
+               end
+           end
+           
+           %convert object back to original array dims
+           obj = reshape(obj,objSize);
         end
-       
+        
+        function [wavelengthUnit, delayUnit, spectraUnit] = getUnits(obj)
+        % GETUNITS returns the current wavelength, delay, and signal units for the
+        % object array. If the units are the same for all elements, the units are
+        % returned as char arrays. If the units are different for any element, all
+        % outputs are returned as cell arrays of chars. The returned cell arrays
+        % are the same size as the object array.
+        %
+        % [wavelengthUnit, delayUnit, spectraUnit] = GETUNITS(obj)
+        %   Returns char arrays or cell arrays containing doubleWithUnits unit
+        %   short names for the wavelengths, delays, and spectra.
+            
+            % Formtat object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            %initialize wavelength, delay, and spectra output for loop
+            wavelengthUnit = cell(objNumel,1);
+            delayUnit = cell(objNumel,1);
+            spectraUnit = cell(objNumel,1);
+            
+            %loop over objects in array and retrive units 
+            for objInd = 1:objNumel
+                wavelengthUnit{objInd} = obj(objInd).wavelengths.unit;
+                delayUnit{objInd} = obj(objInd).delays.unit;
+                spectraUnit{objInd} = obj(objInd).spectra.unit;
+            end
+            
+            %check to see if all units are the same for all objects
+            sameWlUnit = all(strcmp(wavelengthUnit{1},wavelengthUnit));
+            sameDelayUnit = all(strcmp(delayUnit{1},delayUnit));
+            sameSpectraUnit = all(strcmp(spectraUnit{1},spectraUnit));
+            allUnitsSame = sameWlUnit && sameDelayUnit && sameSpectraUnit;
+            
+            %Decide on whether to return one unit or cell array of units
+            if allUnitsSame
+                wavelengthUnit = wavelengthUnit{1};
+                delayUnit = delayUnit{1};
+                spectraUnit = spectraUnit{1};
+            else
+                wavelengthUnit = reshape(wavelengthUnit,objSize);
+                delayUnit = reshape(delayUnit,objSize);
+                spectraUnit = reshape(spectraUnit,objSize);
+            end
+
+        end
+        
+        %Schemes manipulation
+        function obj = getScheme(obj, targetScheme)
+        % GETSCHEME returns an object array that only contains the target scheme.
+        % The target scheme can be either the char name of the scheme or its index.
+        % 
+        % obj = obj.GETSCHEME(targetScheme)
+        %   Returns an object array with data that corresponds to the targetScheme
+        %   name or index.
+        
+            %prepare object array for looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            %loop over object elements
+            for objInd = 1:objNumel
+                %compare target schemes against available schemes in object
+                if ischar(targetScheme) %if scheme is a name, convert it to an index
+                    schemeInd = strcmp(targetScheme,obj(objInd).schemes);
+                    assert(any(schemeInd),[targetScheme ' was not found for object element ' num2str(objInd) '.']);
+                else %if scheme is already an index
+                    schemeInd = targetScheme;
+                    assert(schemeInd<=length(obj(objInd).schemes),[num2str(schemeInd) ' is greater than the number ',...
+                                                                 'of availble schemes for object element' num2str(objInd) '.']);
+                end
+                
+                %update object properties
+                obj(objInd).spectra.data = obj(objInd).spectra.data(:,:,:,:,schemeInd);
+                obj(objInd).spectra_std.data = obj(objInd).spectra_std.data(:,:,:,:,schemeInd);
+                obj(objInd).schemes = obj(objInd).schemes(schemeInd);
+                obj(objInd).sizes.nSchemes = 1;
+            end
+            
+            %return obj back to its original dims
+            obj = reshape(obj, objSize);
+        end   
+                
+        function [logicalOut, ind] = containsScheme(obj, targetScheme)
+        % CONTAINSSCHEME returns a logical array whose elements are true when the
+        % object array element contains the targetScheme. The output logical array
+        % is the same size as the object array.
+        %
+        % logicalOut = obj.CONTAINSSCHEME(targetScheme)
+
+            %prepare object array for data access
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            %a cell array of all schemes for each object array element
+            schemeList = {obj.schemes}; 
+            
+            %loop over object elements to see if its scheme list contains
+            %the targetScheme
+            logicalOut = false(objNumel,1);
+            ind = false(objNumel,max(cellfun(@length,schemeList)));
+            for ii = 1:objNumel
+               tmp = strcmp(targetScheme,schemeList{ii});
+               ind(ii,1:length(tmp)) = tmp;
+               logicalOut(ii) = any(ind(ii,:));
+            end
+            
+            %convert the array size of logical out to the original object array size
+            logicalOut = reshape(logicalOut,objSize);
+        end
+        
+        function [commonSchemes,ind] = getCommonSchemes(obj)
+        % GETCOMMONSCHEMES returns a cell array of scheme names that are common to 
+        % all elements of the object array.
+        %
+        % commonSchemes = obj.GETCOMMONSCHEMES()
+
+            %prepare object array for data access
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            %get cell of all schemes to determine scheme names in the array
+            %that are common to all elements
+            schemeList = {obj.schemes};
+            schemeListAll = vertcat(schemeList{:}); %a cell array of all schemes with char as elements
+            uniqueSchemes = unique(schemeListAll); %unique schemes inside the object array
+            nSchemes = length(uniqueSchemes);   %number of unique schemes
+            nSchemesAll = cellfun(@length,schemeList); %length of the schemes for each object array element
+            
+            %make sure the unique scheme is present in all elements of the object array
+            schemeFound = false(objNumel,nSchemes);
+            ind = false(objNumel,max(nSchemesAll),nSchemes);
+            for ii = 1:nSchemes
+                %to do: how to de-format cell array ind into more useful
+                %datatype
+                [schemeFound(:,ii), ind(:,:,ii)] = obj.containsScheme(uniqueSchemes{ii});
+            end
+            
+            %schemes that are common to all elements of the object array.
+            %Only these schemes, or a subset, can be returned
+            commonSchemes = uniqueSchemes(all(schemeFound,1)); 
+        end
+        
+        function [objOut, schemeList] = splitSchemes(objIn, varargin)
+        
+        %%--PRE_PROCESSING OF OBJECT AND SCHEMES--%%
+            %Get object size to determine final output object size
+            if isvector(objIn)
+                %on output, first dim will be the original vector length, and the 2nd dim will be the scheme size
+                objSize = length(objIn); 
+            else
+                %on output, the obj size will be preserved and the scheme size will be appended as the last dim
+                objSize = size(objIn);   
+            end
+            
+            %prepare object array for looping
+            objNumel = numel(objIn);
+            objIn = objIn(:);
+            
+            %schemes that are common to all elements of the object array.
+            %Only these schemes, or a subset, can be returned
+            schemeList = objIn.getCommonSchemes;
+            nSchemes = length(schemeList);
+            
+            assert(nSchemes>0,'No common schemes found. Schemes cannot be split of object array does not have common schemes');
+            
+        %%--PARSE USER INPUT--%%
+            %default options for user input
+            searchFlag = false;
+            dropFlag = false;
+            
+            %parse varargin
+            argInd = 1;
+            userSchemes = {};
+            while argInd <= length(varargin)
+                if ischar(varargin{argInd}) %User is either using keyword, name-value pair, or listing the schemes to keep
+                    switch varargin{argInd}
+                        case '-search'  %search schemeList
+                            searchChar = varargin{argInd+1}; %to do: check that next input is a string
+                            searchFlag = true;
+                            argInd = argInd + 2;
+                        case '-drop' %user wants to drop schemes from search results or list
+                            dropFlag = true;
+                            argInd = argInd + 1;
+                        otherwise %user is listing specific schemes to keep, add to scheme register
+                            userSchemes = [userSchemes; varargin(argInd)];
+                            argInd = argInd + 1;
+                    end
+                elseif isvector(varargin{argInd})   %User passed a vector of scheme indicies
+                    userSchemes = schemeList(varargin{argInd});
+                    break;  %no other inputs are allowed with vector input
+                else
+                    error('Invalid input. Expected keyword, name-value pair, list of schemes, or vector of scheme indicies');
+                end
+            end       
+            
+            %search common scheme against user input and add to userSchemes
+            if searchFlag
+                foundStr = contains(schemeList,searchChar,'IgnoreCase',true);
+                userSchemes = [userSchemes; schemeList(foundStr)];
+            end
+            
+            %if user made a custom selection
+            if ~isempty(userSchemes)
+                %remove duplicate user schemes
+                userSchemes = unique(userSchemes);
+                
+                %check whether user schemes are valid
+                schemeInd = false(length(userSchemes),nSchemes);
+                for ii = 1:length(userSchemes)
+                   schemeInd(ii,:) = strcmp(userSchemes{ii},schemeList); 
+                   assert(any(schemeInd(ii,:)), ['Could not find scheme: ' userSchemes{ii} '. Available schemes are ' strjoin(schemeList,', ') '.']);
+                end
+                
+                %once all schemes are validated, select subset of schemeList
+                if dropFlag %drop user schemes from schemeList
+                    schemeList = schemeList(~any(schemeInd,1),1);
+                else %use user schemes instead of schemeList
+                    schemeList = userSchemes;
+                end
+                
+                nSchemes = length(schemeList);
+            end
+        
+        %%--GENERATE OBJECT ARRAY WITH SPLIT SCHEMES--%%
+            %initialize output object array, which will be [numel,nSchemes]
+            objOut(objNumel,nSchemes) = objIn(objNumel);
+            
+            %loop over object elements
+            for ii = 1:nSchemes
+                objOut(:,ii) = objIn.getScheme(schemeList{ii});
+            end
+            
+            %return obj back to its original dims
+            objOut = reshape(objOut, [objSize, nSchemes]);
+        end
+            
+    end
+    
+    %% Protected methods for loading data into object. Use constructor to load data.
+    methods (Access = protected)
         %loads a .mat file from a path and converts to a FSRS object
         function varargout = loadPath(obj,myPath)
             loaded = load(myPath);   %load the path contents 
@@ -94,7 +429,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                         
                         %update name in output objects
                         for ii = 1:nargout
-                           varargout{ii}.desc.name = fileName; 
+                           varargout{ii}.name = fileName; 
                         end
                     else
                         %return error
@@ -109,62 +444,32 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             end
         end
         
-        %convert a data holder into a transientSpectra. See convertDH.m for
-        %generic implementation. Override this method in subclasses for specific
-        %implementation
+        % CONVERTDH converts a data holder into a transientSpectra. 
+        % See convertDH.m for generic implementation. Override this method in 
+        % subclasses for specific implementation.
         obj = convertDH(obj, dh_static, dh_array);
-        
-        %export the object data to file
-        [outputStruct, filePath] = export(obj,filePath,varargin)
-        
-        %%**GET-SET METHODS**%%
-        %update units on all unit arrays
-        function obj = setUnits(obj,wavelengthUnit,delayUnit,spectraUnit)
-           if ~isempty(wavelengthUnit)
-               obj.wavelengths.unit = wavelengthUnit;
-           end
-           
-           if ~isempty(delayUnit)
-               obj.delays.unit = delayUnit;
-           end
-           
-           if ~isempty(spectraUnit)
-               obj.spectra.unit = spectraUnit;
-               obj.spectra_std.unit = spectraUnit;
-           end
-           
-        end
-        
-        %return current units
-        function [wavelengthUnit, delayUnit, spectraUnit] = getUnits(obj)
-            wavelengthUnit = obj.wavelengths.unit;
-            delayUnit = obj.delays.unit;
-            spectraUnit = obj.spectra.unit;
-        end
-    end   
+    end
     
     %% Plotting/contour methods for data display
     methods
         function plotSpectra(obj, varargin)
             %%**INITIALIZE DEFAULT VALUES**%%
             %default for delay display: all delays
-            delaysVal = mean(obj.delays.data,[2,3]);
-            nDelays = length(delaysVal);
-            delaysInd = 1:nDelays;
+            delayVals = 'all';
             showDelays = true;  %whether to display in legend
             
             %default for repeat display: average repeats
-            rpts = [];
-            nRpts = 1;
-            showRepeats = false; %whether to display in legend
+%             rpts = [];
+%             nRpts = 1;
+%             showRepeats = false; %whether to display in legend
             
             %default for grating position display: all grating positions
-            gPosVal = obj.gPos;
-            nGPos = length(gPosVal);
-            showGPos = false; %whether to display in legend
+%             gPosVal = obj.gPos;
+%             nGPos = length(gPosVal);
+%             showGPos = false; %whether to display in legend
             
             %default for cosmetics
-            showLegend = true;
+%             showLegend = true;
             
             %todo: decide how to handle NaN points
             
@@ -180,9 +485,8 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                     if ischar(varargin{ii}) %look for 'name' in name-value pair
                         switch varargin{ii} %switch...case over name if name is encountered
                             case 'delays'   %plot a subset of delays in data
-                                %find unique values and indecies in data delays that best match user value input in name-value pair 
-                                [delaysVal, delaysInd] = nearestVal(delaysVal, varargin{ii+1}(:));
-                                nDelays = length(delaysVal);
+                                %update delayVals
+                                delayVals = varargin{ii+1};
                                 
                                 %flag the name-value pair as parsed to remove the args later below
                                 isArgParsed(ii+[0 1]) = [true true];
@@ -198,30 +502,60 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             
             %Update extra arguments
             extraArgs = varargin(~isArgParsed);   %add unparsed arguments to extraargs
-            
                      
             %generate legend
-            delayStr = strtrim(cellstr([num2str(delaysVal(:)) repmat(' ps',nDelays,1)]));   %todo: replace ps with cosmetic unit and add option to specificy precision
+            %delayStr = strtrim(cellstr([num2str(delaysVal(:)) repmat(' ps',nDelays,1)]));   %todo: replace ps with cosmetic unit and add option to specificy precision
             %rptStr = ... %todo: finish rpt formatting
             %gPosStr = ... %todo: finsih gPos formatting
-            legendVal = delayStr(:);    %todo: somehow build a legend string depending on user prefs above
+            %legendVal = delayStr(:);    %todo: somehow build a legend string depending on user prefs above
+                        
+            %%**GENERATE PLOT**%%
+            
+            % Format object array dims into a column for easy looping
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            %Ensure all objects in array have the same units
+            tmpUnits = cell(3,1);
+            [tmpUnits{:}] = obj(1).getUnits;
+            obj = obj.setUnits(tmpUnits{:});
+            
+            %average object over repeats
+            obj = obj.average;
             
             %check hold state
             holdState = ishold();
-            if ~holdState
-                hold on;
-            end
+            counter = 1;
             
-            %%**GENERATE PLOT**%%
-            for ii = 1:obj.sizes.nGPos
-                %add data to x, y plot
-                x = obj.wavelengths.data(:,ii);
-                %avg of rpts and pick the first dataScheme. todo: have case that handles whether to average rpts or not
-                y = mean(obj.spectra.data(:,delaysInd,:,ii),3); %[pixels, delays, rpts, grating pos, schemes]
-                %y = permute(y,[]); %change display priority
-
-                plotArgs = [{x; y}; extraArgs{:}];  %custom generate inputs to pass to plot function
-                plot(plotArgs{:});
+            %Loop over objects
+            for objInd = 1:objNumel  %loop over elements of object array
+                
+                %if user specified a delay subset, get object subset to plot
+                if isvector(delayVals)
+                    obj(objInd) = obj(objInd).subset('delays',delayVals);
+                end
+                
+                %loop over grating positions
+                for ii = 1:obj(objInd).sizes.nGPos  
+                    %add data to x, y plot
+                    x = obj(objInd).wavelengths.data(:,ii);
+                    
+                    %avg of rpts and pick the first dataScheme. todo: have case that handles whether to average rpts or not
+                    y = obj(objInd).spectra.data(:,:,1,ii,:); %[pixels, delays, rpts, grating pos, schemes]
+                    y = permute(y,[1,2,5,3,4]); %change display priority [pixels, delays, schemes]
+                    y = reshape(y,obj(objInd).sizes.nPixels,[]); %[pixels, delays x schemes]
+                    
+                    plotArgs = [{x; y}; extraArgs{:}];  %custom generate inputs to pass to plot function
+                    
+                    if counter == 1
+                        plot(plotArgs{:});
+                        hold on;
+                    else
+                        plot(plotArgs{:});
+                    end
+                    
+                    counter = counter + 1;
+                end
             end
             
             %return to previous hold state
@@ -230,36 +564,31 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             end
             
             %decide on legend formattiong
-            if showLegend
-               legend(legendVal(:)); 
-               %todo: add multi-d legend display
-            end
+%             if showLegend
+%                legend(legendVal(:)); 
+%                %todo: add multi-d legend display
+%             end
             
-            ylabel(obj.spectra.dispName);
-            xlabel(obj.wavelengths.dispName);
-            box on;
+            ylabel(obj(1).spectra.dispName);
+            xlabel(obj(1).wavelengths.dispName);
         end
         
         function plotTrace(obj, varargin)
             %%**INITIALIZE DEFAULT VALUES**%%
             %default for delay display: all wavelengths or wavenumbers
-            xVal = obj.wavelengths.data;
-            nX = length(xVal);
-            waveInd = 1:nX;
-            showX = true;  %whether to display in legend
-            
+            wlVals = 'all';
             %default for repeat display: average repeats
-            rpts = [];
-            nRpts = 1;
-            showRepeats = false; %whether to display in legend
+%             rpts = [];
+%             nRpts = 1;
+%             showRepeats = false; %whether to display in legend
             
             %default for grating position display: all grating positions
-            gPosVal = obj.gPos;
-            nGPos = length(gPosVal);
-            showGPos = false; %whether to display in legend
+%             gPosVal = obj.gPos;
+%             nGPos = length(gPosVal);
+%             showGPos = false; %whether to display in legend
             
             %default for cosmetics
-            showLegend = true;
+%             showLegend = true;
                         
             
             %todo: decide how to handle NaN points
@@ -277,8 +606,7 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                         switch varargin{ii} %switch...case over name if name is encountered
                             case 'wavelengths'   %plot a subset of delays in data
                                 %find unique values and indecies in data delays that best match user value input in name-value pair 
-                                [xVal, waveInd] = nearestVal(xVal, varargin{ii+1}(:));
-                                nX = length(xVal);
+                                wlVals = varargin{ii+1}(:);
                                 
                                 %flag the name-value pair as parsed to remove the args later below
                                 isArgParsed(ii+[0 1]) = [true true];
@@ -296,54 +624,90 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             extraArgs = varargin(~isArgParsed);   %add unparsed arguments to extraargs
             
             %%**GENERATE PLOT**%%
-            %add data to x, y plot
-            x = obj.delays;
-            %avg of rpts and pick the first dataScheme. todo: have case that handles whether to average rpts or not
-            y = mean(obj.spectra(waveInd,:,:,:,1),4); %[pixels, delays, rpts, grating pos, schemes]
-            y = permute(y,[3,2,1,4,5]); %change display priority [delays, schemes, pixels, rpts, grating pos]. todo: figure out if disply priority needs to be different for kinetic traces
-            y = reshape(y,obj.sizes.nDelays,[]);    %turns y into a 2d array [delays, everything else] where left most index is most significant
             
-            %generate legend
-            waveStr = strtrim(cellstr([num2str(xVal(:)) repmat(' nm', nX,1)]));   %todo: replace ps with cosmetic unit and add option to specificy precision
-            %rptStr = ... %todo: finish rpt formatting
-            %gPosStr = ... %todo: finsih gPos formatting
-            legendVal = waveStr(:);    %todo: somehow build a legend string depending on user prefs above
+            % Format object array dims into a column for easy looping
+            objNumel = numel(obj);
+            obj = obj(:);
             
-            plotArgs = [{x; y}; extraArgs{:}];  %custom generate inputs to pass to plot function
-            plot(plotArgs{:});
+            %Ensure all objects in array have the same units
+            tmpUnits = cell(3,1);
+            [tmpUnits{:}] = obj(1).getUnits;
+            obj = obj.setUnits(tmpUnits{:});
             
-            %decide on legend formattiong
-            if showLegend
-               legend(legendVal(:)); 
-               %todo: add multi-d legend display
+            %average object over repeats
+            obj = obj.average;
+            
+            %check hold state
+            holdState = ishold();
+            counter = 1;
+            
+            %Loop over objects
+            for objInd = 1:objNumel  %loop over elements of object array
+                
+                %if user specified a delay subset, get object subset to plot
+                if isvector(wlVals)
+                    obj(objInd) = obj(objInd).subset('wavelengths',wlVals);
+                end
+                
+                %add data to x, y plot
+                x = mean(obj(objInd).delays.data,3);
+
+                %avg of rpts and pick the first dataScheme. todo: have case that handles whether to average rpts or not
+                y = obj(objInd).spectra.data(:,:,1,:,:); %[pixels, delays, rpts, grating pos, schemes]
+                y = permute(y,[2,1,4,5,3]); %change display priority [delays, pixels, grating pos, schemes]
+                y = reshape(y,obj(objInd).sizes.nDelays,[]); %[delays, pixels x grating pos x schemes]
+
+                plotArgs = [{x; y}; extraArgs{:}];  %custom generate inputs to pass to plot function
+
+                if counter == 1
+                    plot(plotArgs{:});
+                    hold on;
+                else
+                    plot(plotArgs{:});
+                end
+
+                counter = counter + 1;
             end
-            ylabel(obj.spectra.dispName);
-            xlabel(obj.delays.dispName);
+            
+            %return to previous hold state
+            if ~holdState
+                hold off;
+            end
         end
     end
     
     %% Data manipulation methods that modify the spectra
     methods
-        %stitches all grating positions together
+        
         function obj = average(obj)
-        % AVERAGE all repeats
+        % AVERAGE all repeats for each element in the object array
         %
         % obj = obj.AVERAGE()
         %   Averages all repeats for obj.spectra, obj.spectra_std, obj.delays and
         %   updates obj.sizes
-
-            %average over repeats in data
-            obj.spectra.data = mean(obj.spectra.data,3);
-            obj.spectra_std.data = sqrt(mean(obj.spectra_std.data.^2,3));
-            obj.delays.data = mean(obj.delays.data,2);
-            %todo: add delay uncertainty?
             
-            %update sizes
-            obj.sizes.nRpts = 1;
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            for objInd = 1:objNumel
+                %average over repeats in data
+                obj(objInd).spectra.data = mean(obj(objInd).spectra.data,3);
+                obj(objInd).spectra_std.data = sqrt(mean(obj(objInd).spectra_std.data.^2,3));
+                obj(objInd).delays.data = mean(obj(objInd).delays.data,2);
+                %todo: add delay uncertainty?
+
+                %update sizes
+                obj(objInd).sizes.nRpts = 1;
+            end
+            
+            %convert object array back to original size
+            obj = reshape(obj,objSize);
         end
         
         function obj = stitch(obj,varargin)
-        % STITCH together available grating positions in object. 
+        % STITCH together available grating positions in object array for each elem. 
         % This works by sorting the data in ascending wavelength and stitching a 
         % pair of grating positions at a time. For multiple grating positions, 
         % the previously stitched grating position is treated as the first grating 
@@ -370,111 +734,121 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
             else
                 strategy = 'linear';
             end
-            
-        %%--Revert units to nm--%%
-            %remember old units
-            tmpUnits = cell(3,1);
-            [tmpUnits{:}] = obj.getUnits();
-            
-            %update units to units where x-axis is in nm
-            obj = obj.setUnits('nm',[],[]);
-            
-        %%--Sort wavelengths and grating positions--%%
-            %sort everything by ascending order in terms of grating position nm, wavelength nm, delay ps
-            [gPosSorted,gInd] = sort(obj.gPos);
-            [wl, lInd] = sort(obj.wavelengths.data(:,gInd));    %[wavelengths, grating positions]
-            t = obj.delays.data(:,:,gInd);    %[delays, repeats, grating positions]
-            
-            %sort by grating position first
-            data = obj.spectra.data(:,:,:,gInd,:);  %[pixels, delays, rpts, GRATING POS, schemes]
                         
-            %sort by wavelengths next
-            for ii = 1:size(lInd,2) %loop over grating positions
-                data(:,:,:,ii,:) = data(lInd(:,ii),:,:,ii,:); %[PIXELS, delays, rpts, GRATING POS, schemes]
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            for objInd = 1:objNumel
+            %%--Revert units to nm--%%
+                %remember old units
+                tmpUnits = cell(3,1);
+                [tmpUnits{:}] = obj(objInd).getUnits();
+
+                %update units to units where x-axis is in nm
+                obj(objInd) = obj(objInd).setUnits('nm',[],[]);       
+                
+            %%--Sort wavelengths and grating positions--%%
+                %sort everything by ascending order in terms of grating position nm, wavelength nm, delay ps
+                [gPosSorted,gInd] = sort(obj(objInd).gPos);
+                [wl, lInd] = sort(obj(objInd).wavelengths.data(:,gInd));    %[wavelengths, grating positions]
+
+                %sort by grating position first
+                data = obj(objInd).spectra.data(:,:,:,gInd,:);  %[pixels, delays, rpts, GRATING POS, schemes]
+
+                %sort by wavelengths next
+                for ii = 1:size(lInd,2) %loop over grating positions
+                    data(:,:,:,ii,:) = data(lInd(:,ii),:,:,ii,:); %[PIXELS, delays, rpts, GRATING POS, schemes]
+                end
+
+                %permute and reshape data so that it is easier to interpolate and stitch
+                data = permute(data,[1,2,3,5,4]);   %[pixels, delays, rpts, schemes, grating pos]
+                data = reshape(data,obj(objInd).sizes.nPixels,[],obj(objInd).sizes.nGPos); %[pixels, delays*rpts*schemes, grating pos]
+
+            %%--Stitch wavelengths and data--%%
+                %grating positions will be stitched in pairs sequentially. If
+                %there are multiple grating positions, already stitched data
+                %will be treated as one grating position
+                tmpWl = wl(~isnan(wl(:,1)),1);    %holder for concatonated wavelengths starting from 1st grating pos
+                tmpData1 = data(~isnan(wl(:,1)),:,1);  %holder for concatonated data starting from 1st grating pos
+
+                for ii = 2:obj(objInd).sizes.nGPos %loop over grating positions starting from the 2nd one
+                    %remove NaN from next grating position
+                    tmpW2 = wl(~isnan(wl(:,ii)),ii); 
+                    tmpData2 = data(~isnan(wl(:,ii)),:,ii);
+
+                    %First find overlap region in wavelengths
+                    high1 = tmpWl(end);    %highest wavelength in 1st grating position
+                    low2 = tmpW2(1);     %lowest wavelength in 2nd grating position
+
+                    [low1, low1Ind] = nearestVal(tmpWl,low2); %lowest wavelength and index in 1st grating position
+                    [high2, high2Ind] = nearestVal(tmpW2,high1); %lowest wavelength and index in 2nd grating position
+
+                    %Make sure indicies do not cause data/wavelength extrapolation (overlap region needs to be inclusive)
+                    if low1<low2   %check first grating position
+                        low1Ind = low1Ind + 1;
+                        low1 = tmpWl(low1Ind);
+                    end
+
+                    if high2>high1 %check second grating position
+                        high2Ind = high2Ind - 1;
+                        high2 = wl(high2Ind,ii);
+                    end
+
+                    %define lower and upper regions
+                    lowWl = tmpWl(1:low1Ind-1); %1st grating positions lower wavelengths
+                    highWl = tmpW2(high2Ind+1:end); %2nd grating positions higher wavelengths
+                    lowData = tmpData1(1:low1Ind-1,:);   %1st grating positions lower data
+                    highData = tmpData2(high2Ind+1:end,:);   %second grating positoins higher data
+
+                    %Next interpolate middle region
+                    nInd = ceil(0.5*(length(tmpWl(low1Ind:end))+length(tmpW2(1:high2Ind))));    %average number of in-between indicies
+                    midWl = linspace(low1,high2,nInd)';  %new wavelengths in overlap region with linear spacing between them
+                    mid1Data = interp1(tmpWl,tmpData1,midWl,'linear');   %interpolate 1st grating position on overlap scale
+                    mid2Data = interp1(tmpW2,tmpData2,midWl,'linear'); %interpolate 2nd grating position on overlap scale
+
+                    %Execute strategy to combine data in overlap region
+                    switch strategy
+                        case 'average' %take the average in the overlap region
+                            midData = 0.5*(mid1Data+mid2Data);  
+                        case 'lower' %take the lower (1st) grating position
+                            midData = mid1Data;  
+                        case 'upper' %take the higher (2nd) grating position
+                            midData = mid2Data;  
+                        case 'half'  %stitch at half-way point
+                            midData = [mid1Data(1:floor(nInd/2),:); mid2Data((floor(nInd/2)+1):end,:)];
+                        case 'linear'   %do a weighted average with a linear sweep of the weights from the 1st to 2nd grating position
+                            weightsFun = polyfit([midWl(1), midWl(end)],[0, 1],1);    %linear fit for weights
+                            weights = polyval(weightsFun,midWl);    %calculate weights from nm values
+                            midData = mid1Data.*(1-weights)+mid2Data.*weights;  %this does the weighted average
+                        otherwise
+                            error(['Unsupported strategy. Available stragegies are average, lower, upper, half, and linear. Got ' strategy '.']);
+                    end
+                    %concatonate the three regions across the 1st (pixel) dimension
+                    tmpWl = [lowWl; midWl; highWl]; %store in tmpWl so that it can be fed as 1st grating position in next iteration 
+                    tmpData1 = [lowData; midData; highData]; %store in tmpdata so that it can be fed as 1st grating position in next iteration 
+                end
+
+            %%--Convert wavelengths and data back to original state and update object parameters--%%
+                %reshape and permute data back to original dim order
+                data = reshape(tmpData1,[],obj(objInd).sizes.nDelays,obj(objInd).sizes.nRpts,obj(objInd).sizes.nSchemes); %[pixels, delays, rpts, schemes, grating pos]
+                data = permute(data,[1,2,3,5,4]); %[pixels, delays, rpts, grating pos, schemes]
+
+                %update values for object properties
+                obj(objInd).spectra.data = data;
+                obj(objInd).wavelengths.data = tmpWl;
+                obj(objInd).gPos = median(gPosSorted);
+                obj(objInd).sizes.nPixels = length(tmpWl);
+                obj(objInd).sizes.nGPos = 1;
+                obj(objInd).delays.data = mean(obj(objInd).delays.data,3);
+                
+                %set units back to input units
+                obj(objInd) = obj(objInd).setUnits(tmpUnits{:});
             end
             
-            %permute and reshape data so that it is easier to interpolate and stitch
-            data = permute(data,[1,2,3,5,4]);   %[pixels, delays, rpts, schemes, grating pos]
-            data = reshape(data,obj.sizes.nPixels,[],obj.sizes.nGPos); %[pixels, delays*rpts*schemes, grating pos]
-            
-        %%--Stitch wavelengths and data--%%
-            %grating positions will be stitched in pairs sequentially. If
-            %there are multiple grating positions, already stitched data
-            %will be treated as one grating position
-            tmpWl = wl(~isnan(wl(:,1)),1);    %holder for concatonated wavelengths starting from 1st grating pos
-            tmpData1 = data(~isnan(wl(:,1)),:,1);  %holder for concatonated data starting from 1st grating pos
-            
-            for ii = 2:obj.sizes.nGPos %loop over grating positions starting from the 2nd one
-                %remove NaN from next grating position
-                tmpW2 = wl(~isnan(wl(:,ii)),ii); 
-                tmpData2 = data(~isnan(wl(:,ii)),:,ii);
-                
-                %First find overlap region in wavelengths
-                high1 = tmpWl(end);    %highest wavelength in 1st grating position
-                low2 = tmpW2(1);     %lowest wavelength in 2nd grating position
-                
-                [low1, low1Ind] = nearestVal(tmpWl,low2); %lowest wavelength and index in 1st grating position
-                [high2, high2Ind] = nearestVal(tmpW2,high1); %lowest wavelength and index in 2nd grating position
-                
-                %Make sure indicies do not cause data/wavelength extrapolation (overlap region needs to be inclusive)
-                if low1<low2   %check first grating position
-                    low1Ind = low1Ind + 1;
-                    low1 = tmpWl(low1Ind);
-                end
-                
-                if high2>high1 %check second grating position
-                    high2Ind = high2Ind - 1;
-                    high2 = wl(high2Ind,ii);
-                end
-                
-                %define lower and upper regions
-                lowWl = tmpWl(1:low1Ind-1); %1st grating positions lower wavelengths
-                highWl = tmpW2(high2Ind+1:end); %2nd grating positions higher wavelengths
-                lowData = tmpData1(1:low1Ind-1,:);   %1st grating positions lower data
-                highData = tmpData2(high2Ind+1:end,:);   %second grating positoins higher data
-                
-                %Next interpolate middle region
-                nInd = ceil(0.5*(length(tmpWl(low1Ind:end))+length(tmpW2(1:high2Ind))));    %average number of in-between indicies
-                midWl = linspace(low1,high2,nInd)';  %new wavelengths in overlap region with linear spacing between them
-                mid1Data = interp1(tmpWl,tmpData1,midWl,'linear');   %interpolate 1st grating position on overlap scale
-                mid2Data = interp1(tmpW2,tmpData2,midWl,'linear'); %interpolate 2nd grating position on overlap scale
-                
-                %Execute strategy to combine data in overlap region
-                switch strategy
-                    case 'average' %take the average in the overlap region
-                        midData = 0.5*(mid1Data+mid2Data);  
-                    case 'lower' %take the lower (1st) grating position
-                        midData = mid1Data;  
-                    case 'upper' %take the higher (2nd) grating position
-                        midData = mid2Data;  
-                    case 'half'  %stitch at half-way point
-                        midData = [mid1Data(1:floor(nInd/2),:); mid2Data((floor(nInd/2)+1):end,:)];
-                    case 'linear'   %do a weighted average with a linear sweep of the weights from the 1st to 2nd grating position
-                        weightsFun = polyfit([midWl(1), midWl(end)],[0, 1],1);    %linear fit for weights
-                        weights = polyval(weightsFun,midWl);    %calculate weights from nm values
-                        midData = mid1Data.*(1-weights)+mid2Data.*weights;  %this does the weighted average
-                    otherwise
-                        error(['Unsupported strategy. Available stragegies are average, lower, upper, half, and linear. Got ' strategy '.']);
-                end
-                %concatonate the three regions across the 1st (pixel) dimension
-                tmpWl = [lowWl; midWl; highWl]; %store in tmpWl so that it can be fed as 1st grating position in next iteration 
-                tmpData1 = [lowData; midData; highData]; %store in tmpdata so that it can be fed as 1st grating position in next iteration 
-            end
-            
-        %%--Convert wavelengths and data back to original state and update object parameters--%%
-            %reshape and permute data back to original dim order
-            data = reshape(tmpData1,[],obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nSchemes); %[pixels, delays, rpts, schemes, grating pos]
-            data = permute(data,[1,2,3,5,4]); %[pixels, delays, rpts, grating pos, schemes]
-            
-            %update values for object properties
-            obj.spectra.data = data;
-            obj.wavelengths.data = tmpWl;
-            obj.gPos = median(gPosSorted);
-            obj.sizes.nPixels = length(tmpWl);
-            obj.sizes.nGPos = 1;
-            
-            %set units back to input units
-            obj = obj.setUnits(tmpUnits{:});
+            %set 
+            obj = reshape(obj, objSize);
         end
         
         function obj = trim(obj, varargin)
@@ -528,62 +902,73 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                     end
                 end
             end
-                      
-            %trim wavelengths
-            if ischar(trimVals.wls)  %this is a do nothing case
-                % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(trimVals.wls,'all'),'Expected all keyword or wavelength range [wl1, wl2] of type double.');
-                
-            elseif isa(trimVals.wls,'double')   %this does the wavelength trim
-                %ensure the user has correct input before trimming
-                assert(length(trimVals.wls)==2, 'Expected wavelength range [wl1, wl2] of type double.');
-                trimVals.wls = sort(trimVals.wls);  %ensure wavelengths are in increasing order
-                
-                %find the wavelength range indicies in all grating positions
-                wls = obj.wavelengths.data(:);  %[pixels x gPos]
-                wls = wls(~isnan(wls));
-                wls = sort(wls);
-                
-                %select t subrange within (inclusive) the trim range
-                wls = wls(and(wls>=trimVals.wls(1),wls <= trimVals.wls(2)));
-                
-                %select the object data subset that contains the trimmed t values
-                
-                obj = obj.subset('wavelengths',wls);
-                
-            else
-                error('Expected all keyword or wavelength range [wl1, wl2] of type double.');
+            
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            for objInd = 1:objNumel
+            
+                %trim wavelengths
+                if ischar(trimVals.wls)  %this is a do nothing case
+                    % Assert correct input to ensure user isn't accidently doing something they're not aware of
+                    assert(strcmp(trimVals.wls,'all'),'Expected all keyword or wavelength range [wl1, wl2] of type double.');
+
+                elseif isa(trimVals.wls,'double')   %this does the wavelength trim
+                    %ensure the user has correct input before trimming
+                    assert(length(trimVals.wls)==2, 'Expected wavelength range [wl1, wl2] of type double.');
+                    trimVals.wls = sort(trimVals.wls);  %ensure wavelengths are in increasing order
+
+                    %find the wavelength range indicies in all grating positions
+                    wls = obj(objInd).wavelengths.data(:);  %[pixels x gPos]
+                    wls = wls(~isnan(wls));
+                    wls = sort(wls);
+
+                    %select t subrange within (inclusive) the trim range
+                    wls = wls(and(wls>=trimVals.wls(1),wls <= trimVals.wls(2)));
+
+                    %select the object data subset that contains the trimmed t values
+
+                    obj(objInd) = obj(objInd).subset('wavelengths',wls);
+
+                else
+                    error('Expected all keyword or wavelength range [wl1, wl2] of type double.');
+                end
+
+                %trim delays
+                if ischar(trimVals.delays)  %this is a do nothing case
+                    % Assert correct input to ensure user isn't accidently doing something they're not aware of
+                    assert(strcmp(trimVals.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
+
+                elseif isa(trimVals.delays,'double')   %this does the wavelength trim
+                    %ensure the user has correct input before trimming
+                    assert(length(trimVals.delays)==2, 'Expected delay range [d1, d2] of type double.');
+                    trimVals.delays = sort(trimVals.delays);    %ensure delays are in increasing order
+
+                    %find the wavelength range indicies
+                    t = obj(objInd).delays.data(:);  %[delays x rpts x gPos]
+                    t = t(~isnan(t));
+                    t = sort(t);
+
+                    %select t subrange within (inclusive) the trim range
+                    t = t(and(t>=trimVals.delays(1),t <= trimVals.delays(2)));
+
+                    %select the object data subset that contains the trimmed t values
+                    obj(objInd) = obj(objInd).subset('delays',t);
+
+                else
+                    error('Expected all keyword or delay range [d1, d2] of type double.');
+                end
             end
             
-            %trim delays
-            if ischar(trimVals.delays)  %this is a do nothing case
-                % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(trimVals.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
-                
-            elseif isa(trimVals.delays,'double')   %this does the wavelength trim
-                %ensure the user has correct input before trimming
-                assert(length(trimVals.delays)==2, 'Expected delay range [d1, d2] of type double.');
-                trimVals.delays = sort(trimVals.delays);    %ensure delays are in increasing order
-                
-                %find the wavelength range indicies
-                t = obj.delays.data(:);  %[delays x rpts x gPos]
-                t = t(~isnan(t));
-                t = sort(t);
-                
-                %select t subrange within (inclusive) the trim range
-                t = t(and(t>=trimVals.delays(1),t <= trimVals.delays(2)));
-                
-                %select the object data subset that contains the trimmed t values
-                obj = obj.subset('delays',t);
-                
-            else
-                error('Expected all keyword or delay range [d1, d2] of type double.');
-            end
+            %reshape object back to original array size
+            obj = reshape(obj,objSize);
         end
         
         function obj = subset(obj, varargin)
-        % SUBSET Returns a subset object closest to the input target ranges.
-        % This function returns an object with data limited to the wavelengths and
+        % SUBSET Returns a subset object array closest to the input target ranges.
+        % This function returns objects with data limited to the wavelengths and
         % delays closest to the target ranges. If the user desires a subset with
         % wavelength and delay values that exactly match the input ranges, use the
         % interp method.
@@ -634,112 +1019,123 @@ classdef transientSpectra < matlab.mixin.Heterogeneous
                     end
                 end
             end
-                      
-            %subset wavelengths
-            if ischar(subVals.wls)  %this is a do nothing case
-                % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(subVals.wls,'all'),'Expected all keyword or wavelength range [wl1, wl2] of type double.');
-                
-            elseif isa(subVals.wls,'double') && ~isempty(subVals.wls)  %this does the wavelength trim              
-                %get actual indicies and wavelengths from object data. These may be
-                %multi-dim if there are multiple repeats and grating positions
-                wls = obj.wavelengths.data; %[wls, gpos]
-                [~, wlInd] = nearestVal(wls,subVals.wls,'threshold',0.01*(max(wls(:))-min(wls(:))));               
-                        
-                %for easy looping, do the following dim rearrangement:
-                %[pixels, delays, rpts, gpos, schemes] -> [pixels, delays x rpts x schemes, gpos]
-                tmpSpectra = permute(obj.spectra.data,[1,2,3,5,4]);
-                tmpSpectra = reshape(tmpSpectra,obj.sizes.nPixels,[],obj.sizes.nGPos);
+            
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            for objInd = 1:objNumel
+            
+                %subset wavelengths
+                if ischar(subVals.wls)  %this is a do nothing case
+                    % Assert correct input to ensure user isn't accidently doing something they're not aware of
+                    assert(strcmp(subVals.wls,'all'),'Expected all keyword or wavelength range [wl1, wl2] of type double.');
 
-                %Allocate NaN double arrays and place spectra values into it 
-                trimmedSpectra = nan(size(tmpSpectra)); %[pixels, delays x rpts x schemes, gpos]
-                trimmedWls = nan(size(wls)); %[pixels, gpos]
-               
-                %loop over grating positions to sub-select range dicated by wlInd
-                for ii = 1:obj.sizes.nGPos
-                    %remove NaN from wlInd
-                    wlIndNoNaN = wlInd(~isnan(wlInd(:,ii)),ii);
-                    
-                    %copy desired subrange for each grating position into the NaN arrays starting from index 1
-                    trimmedWls(1:length(wlIndNoNaN),ii) = wls(wlIndNoNaN,ii);
-                    trimmedSpectra(1:length(wlIndNoNaN),:,ii) = tmpSpectra(wlIndNoNaN,:,ii); 
+                elseif isa(subVals.wls,'double') && ~isempty(subVals.wls)  %this does the wavelength trim              
+                    %get actual indicies and wavelengths from object data. These may be
+                    %multi-dim if there are multiple repeats and grating positions
+                    wls = obj(objInd).wavelengths.data; %[wls, gpos]
+                    [~, wlInd] = nearestVal(wls,subVals.wls,'threshold',0.01*(max(wls(:))-min(wls(:))));               
+
+                    %for easy looping, do the following dim rearrangement:
+                    %[pixels, delays, rpts, gpos, schemes] -> [pixels, delays x rpts x schemes, gpos]
+                    tmpSpectra = permute(obj(objInd).spectra.data,[1,2,3,5,4]);
+                    tmpSpectra = reshape(tmpSpectra,obj(objInd).sizes.nPixels,[],obj(objInd).sizes.nGPos);
+
+                    %Allocate NaN double arrays and place spectra values into it 
+                    trimmedSpectra = nan(size(tmpSpectra)); %[pixels, delays x rpts x schemes, gpos]
+                    trimmedWls = nan(size(wls)); %[pixels, gpos]
+
+                    %loop over grating positions to sub-select range dicated by wlInd
+                    for ii = 1:obj(objInd).sizes.nGPos
+                        %remove NaN from wlInd
+                        wlIndNoNaN = wlInd(~isnan(wlInd(:,ii)),ii);
+
+                        %copy desired subrange for each grating position into the NaN arrays starting from index 1
+                        trimmedWls(1:length(wlIndNoNaN),ii) = wls(wlIndNoNaN,ii);
+                        trimmedSpectra(1:length(wlIndNoNaN),:,ii) = tmpSpectra(wlIndNoNaN,:,ii); 
+                    end
+
+                    %remove any dims that are all NaN
+                    isWlNaN = all(isnan(trimmedWls),2); %all wls are NaN for each gpos, delay, rpt, and scheme
+                    isGPosNaN = all(isnan(trimmedWls),1); %all wls are NaN for each wl, delay, rpt, and scheme
+                    trimmedWls = trimmedWls(~isWlNaN,~isGPosNaN); %[wls, gpos]
+                    trimmedSpectra = trimmedSpectra(~isWlNaN,:,~isGPosNaN); %[pixels, delays x rpts x schemes, gpos]
+                    trimmedGPos = obj(objInd).gPos(~isGPosNaN);
+
+                    %update sizes
+                    obj(objInd).sizes.nPixels = size(trimmedWls,1);
+                    obj(objInd).sizes.nGPos = length(trimmedGPos);
+
+                    %convert spectra back to original dimensions and dim order
+                    %[pixels, delays x rpts x schemes, gpos] -> [pixels, delays, rpts, gpos, schemes]
+                    trimmedSpectra = reshape(trimmedSpectra,obj(objInd).sizes.nPixels,obj(objInd).sizes.nDelays,obj(objInd).sizes.nRpts,obj(objInd).sizes.nSchemes,obj(objInd).sizes.nGPos); %[pixels, delays, rpts, schemes, gpos]
+                    trimmedSpectra = permute(trimmedSpectra,[1,2,3,5,4]); %[pixels, delays, rpts, gpos, schemes]
+
+                    %add data back to obj(objInd)ect
+                    obj(objInd).wavelengths.data = trimmedWls;
+                    obj(objInd).spectra.data = trimmedSpectra;
+                    obj(objInd).gPos = trimmedGPos;
+
+                else
+                    error('Expected all keyword or wavelengths array of type double.');
                 end
-                
-                %remove any dims that are all NaN
-                isWlNaN = all(isnan(trimmedWls),2); %all wls are NaN for each gpos, delay, rpt, and scheme
-                isGPosNaN = all(isnan(trimmedWls),1); %all wls are NaN for each wl, delay, rpt, and scheme
-                trimmedWls = trimmedWls(~isWlNaN,~isGPosNaN); %[wls, gpos]
-                trimmedSpectra = trimmedSpectra(~isWlNaN,:,~isGPosNaN); %[pixels, delays x rpts x schemes, gpos]
-                trimmedGPos = obj.gPos(~isGPosNaN);
-                
-                %update sizes
-                obj.sizes.nPixels = size(trimmedWls,1);
-                obj.sizes.nGPos = length(trimmedGPos);
-                
-                %convert spectra back to original dimensions and dim order
-                %[pixels, delays x rpts x schemes, gpos] -> [pixels, delays, rpts, gpos, schemes]
-                trimmedSpectra = reshape(trimmedSpectra,obj.sizes.nPixels,obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nSchemes,obj.sizes.nGPos); %[pixels, delays, rpts, schemes, gpos]
-                trimmedSpectra = permute(trimmedSpectra,[1,2,3,5,4]); %[pixels, delays, rpts, gpos, schemes]
-                
-                %add data back to object
-                obj.wavelengths.data = trimmedWls;
-                obj.spectra.data = trimmedSpectra;
-                obj.gPos = trimmedGPos;
-                
-            else
-                error('Expected all keyword or wavelengths array of type double.');
+
+                %subset delays
+                if ischar(subVals.delays)  %this is a do nothing case
+                    % Assert correct input to ensure user isn't accidently doing something they're not aware of
+                    assert(strcmp(subVals.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
+
+                elseif isa(subVals.delays,'double') && ~isempty(subVals.delays)   %this does the delay subset               
+                    %find the wavelength range indicies
+                    t = reshape(obj(objInd).delays.data, obj(objInd).sizes.nDelays, []);  %[delays, rpts x gPos]
+                    [~,tInd] = nearestVal(t,subVals.delays); %tInd is [delays, rpts x gPos]
+
+                    %for easy looping, do the following dim rearrangement:
+                    %[pixels, delays, rpts, gpos, schemes] -> [delays, pixels x schemes, rpts x gpos]
+                    tmpSpectra = permute(obj(objInd).spectra.data,[2,1,5,3,4]);
+                    tmpSpectra = reshape(tmpSpectra,obj(objInd).sizes.nDelays,obj(objInd).sizes.nPixels*obj(objInd).sizes.nSchemes,[]);
+
+                    %Allocate NaN double arrays and place spectra values into it 
+                    trimmedSpectra = nan(size(tmpSpectra)); %[delays, pixels x schems, rpts x gpos]
+                    trimmedDelays = nan(size(t)); %[delays, rpts x gpos]
+
+                    %loop over grating positions and repeats to sub-select range dicated by wlInd
+                    for ii = 1:size(tInd,2)
+                        %remove NaN from tInd
+                        tNoNaN = tInd(~isnan(tInd(:,ii)),ii);
+
+                        %copy desired subrange for each grating position into the NaN arrays starting from index 1
+                        trimmedDelays(1:length(tNoNaN),ii) = t(tNoNaN,ii); %[delays, rpts x gpos]
+                        trimmedSpectra(1:length(tNoNaN),:,ii) = tmpSpectra(tNoNaN,:,ii); %[delays, pixels x schems, rpts x gpos]
+                    end
+
+                    %remove any dims that are all NaN
+                    isDelayNaN = all(isnan(trimmedDelays),2); %all delays are NaN for each rpt and gpos
+                    trimmedDelays = trimmedDelays(~isDelayNaN,:); %[delays, rpts x gpos]
+                    trimmedSpectra = trimmedSpectra(~isDelayNaN,:,:); %[delays, pixels x schems, rpts x gpos]
+
+                    %update sizes
+                    obj(objInd).sizes.nDelays = size(trimmedDelays,1);
+
+                    %convert spectra back to original dimensions and dim order
+                    %[delays, pixels x schemes, rpts x gpos] -> %[pixels, delays, rpts, gpos, schemes]
+                    trimmedDelays = reshape(trimmedDelays,obj(objInd).sizes.nDelays,obj(objInd).sizes.nRpts,obj(objInd).sizes.nGPos); %[delays, rpts, gPos]
+                    trimmedSpectra = reshape(trimmedSpectra,obj(objInd).sizes.nDelays,obj(objInd).sizes.nPixels,obj(objInd).sizes.nSchemes,obj(objInd).sizes.nRpts,obj(objInd).sizes.nGPos); %[delays, pixels, schemes, rpts, gpos]
+                    trimmedSpectra = permute(trimmedSpectra,[2,1,4,5,3]); %[pixels, delays, rpts, gpos, schemes]
+
+                    %add data back to object
+                    obj(objInd).delays.data = trimmedDelays;
+                    obj(objInd).spectra.data = trimmedSpectra;
+
+                else
+                    error('Expected all keyword or delay array of type double.');
+                end
             end
             
-            %subset delays
-            if ischar(subVals.delays)  %this is a do nothing case
-                % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(subVals.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
-                
-            elseif isa(subVals.delays,'double') && ~isempty(subVals.delays)   %this does the delay subset               
-                %find the wavelength range indicies
-                t = reshape(obj.delays.data, obj.sizes.nDelays, []);  %[delays, rpts x gPos]
-                [~,tInd] = nearestVal(t,subVals.delays); %tInd is [2,rpts x gPos]
-                            
-                %for easy looping, do the following dim rearrangement:
-                %[pixels, delays, rpts, gpos, schemes] -> [delays, pixels x schemes, rpts x gpos]
-                tmpSpectra = permute(obj.spectra.data,[2,1,5,3,4]);
-                tmpSpectra = reshape(tmpSpectra,obj.sizes.nDelays,obj.sizes.nPixels*obj.sizes.nSchemes,[]);
-
-                %Allocate NaN double arrays and place spectra values into it 
-                trimmedSpectra = nan(size(tmpSpectra)); %[delays, pixels x schems, rpts x gpos]
-                trimmedDelays = nan(size(t)); %[delays, rpts x gpos]
-                
-                %loop over grating positions and repeats to sub-select range dicated by wlInd
-                for ii = 1:size(tInd,2)
-                    %remove NaN from tInd
-                    tNoNaN = tInd(~isnan(tInd(:,ii)),ii);
-                    
-                    %copy desired subrange for each grating position into the NaN arrays starting from index 1
-                    trimmedDelays(1:length(tNoNaN),ii) = t(tNoNaN,ii); %[delays, rpts x gpos]
-                    trimmedSpectra(1:length(tNoNaN),:,ii) = tmpSpectra(tNoNaN,:,ii); %[delays, pixels x schems, rpts x gpos]
-                end
-                
-                %remove any dims that are all NaN
-                isDelayNaN = all(isnan(trimmedDelays),2); %all delays are NaN for each rpt and gpos
-                trimmedDelays = trimmedDelays(~isDelayNaN,:); %[delays, rpts x gpos]
-                trimmedSpectra = trimmedSpectra(~isDelayNaN,:,:); %[delays, pixels x schems, rpts x gpos]
-                
-                %update sizes
-                obj.sizes.nDelays = size(trimmedDelays,1);
-                
-                %convert spectra back to original dimensions and dim order
-                %[delays, pixels x schemes, rpts x gpos] -> %[pixels, delays, rpts, gpos, schemes]
-                trimmedDelays = reshape(trimmedDelays,obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nGPos); %[delays, rpts, gPos]
-                trimmedSpectra = reshape(trimmedSpectra,obj.sizes.nDelays,obj.sizes.nPixels,obj.sizes.nSchemes,obj.sizes.nRpts,obj.sizes.nGPos); %[delays, pixels, schemes, rpts, gpos]
-                trimmedSpectra = permute(trimmedSpectra,[2,1,4,5,3]); %[pixels, delays, rpts, gpos, schemes]
-                
-                %add data back to object
-                obj.delays.data = trimmedDelays;
-                obj.spectra.data = trimmedSpectra;
-                
-            else
-                error('Expected all keyword or delay array of type double.');
-            end
+            %reshape object back to original array size
+            obj = reshape(obj,objSize);
         end
         
         function obj = interp(obj, varargin)

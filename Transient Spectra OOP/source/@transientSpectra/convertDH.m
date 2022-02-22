@@ -83,10 +83,8 @@ function obj = convertDH(obj, dh_static, dh_array)
     end
 
     %get list of acquired schemes
-    obj.schemes = cell(obj.sizes.nSchemes,1);
-    for ii = 1:obj.sizes.nSchemes
-       obj.schemes(ii) = {dh_array(1).proc_data.dataScheme}; 
-    end
+    obj.schemes = {dh_array(1).proc_data.dataScheme};
+    obj.schemes = obj.schemes(:);
     
     %set units for spectra
     obj.spectra = obj.spectra.changeBaseName('OD','\DeltaAbs. (OD)');
@@ -97,6 +95,6 @@ function obj = convertDH(obj, dh_static, dh_array)
     obj.spectra_std.data = reshape(spectrastd_tmp, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
 
     %Set a default short name, long name, and description
-    obj.desc.description = dh_static.Description;
+    obj.description = dh_static.Description;
 
 end

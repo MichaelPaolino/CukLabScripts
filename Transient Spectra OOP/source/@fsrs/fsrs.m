@@ -6,72 +6,112 @@ classdef fsrs < transientSpectra
 
     % Constructor, load, get and set methods with custom implementation
     methods
-        %%CONSTRUCTOR/LOAD METHODS%%
+    %%CONSTRUCTOR/LOAD METHODS%%
 
-        %use transientSpectra constructor. Matlab calls this implicitly
-        
-        %override superclass convertDH method to convert multi-scheme data
-        %into specific scheme objects. Call this to load multiple objects
-        function [objGsFsrs, objEsFsrs, objTR] = convertDH(obj, dh_static, dh_array)
+        function obj = fsrs(varargin)
+        % FSRS constructs a transientSpectra object with additional FSRS-specific
+        % functionality. 
             
-            %call parent method first for generic conversion of dh_array to transientSpectra
-            obj = convertDH@transientSpectra(obj, dh_static, dh_array);
+        %%--SPLIT FSRS SPECIFIC AND TRANSIENT SPECTRA SPECIFIC ARGS--%%
+            %fsrs specific arguments
+            %cell array of fsrs specific keywords
+            fsrsKeywords = {'ramanPumpNm'};
+            %double array of corresponding input argument length for each
+            %keyword (1 for keyword, 2 for name-value pair, etc.)
+            fsrsArgLen = [2];
             
-            %add unit rules to spectra, delays, etc. todo: add to method
-            obj.spectra = obj.spectra.addRule('mOD','\DeltaAbs. (mOD)',...
-                                                @(f) 1e3*f, @(f) 1e-3*f);
-            obj.spectra = obj.spectra.addRule('%Gain','Raman Gain (%)',...
-                                                @(f) 1e2*(10.^f-1), @(f) log10(1+1e-2*f));
-            obj.spectra = obj.spectra.addRule('ppmGain','Raman Gain (ppm)',...
-                                                @(f) 1e6*(10.^f-1), @(f) log10(1+1e-6*f));
+            %Loop over varargin and if the arguemnt keyword matches a fsrs keyword:
+            %1. set it as empty
+            %2. add it to the fsrs args
+            %3. update iterator by expected length of keyword/name-value pair
+            superClassArgs = varargin;  %these will be sent to the transientSpectra constructor
+            subClassArgs = cell(size(varargin));   %these will be parsed inside the fsrs constructor
+            argInd = 1;
             
-            obj.delays = obj.delays.addRule('fs','Delay (fs)',@(f) 1e3*f, @(f) 1e-3*f);
-            obj.delays = obj.delays.addRule('ns','Delay (ns)',@(f) 1e-3*f, @(f) 1e3*f);
-            obj.delays = obj.delays.addRule('us','Delay (\ms)',@(f) 1e-6*f, @(f) 1e6*f);
-            
-            obj.wavelengths = obj.wavelengths.addRule('um','Wavelength (\mm)',....
-                                                        @(f) 1e3*f, @(f) 1e-3*f);
-            obj.wavelengths = obj.wavelengths.addRule('eV','Energy (eV)',...
-                                                        @(f) 1239.8./f, @(f) 1239.8./f);
-            obj.wavelengths = obj.wavelengths.addRule('ecm-1','Wavenumber (cm^{-1})',...
-                                                        @(f) 1e7./f, @(f) 1e7./f);
-            obj.wavelengths = obj.wavelengths.addRule('rcm-1','Raman Shift (cm^{-1})',...
-                                                        @(f) 1e7*(1/obj.ramanPumpNm-1./f),...
-                                                        @(f) 1./(1/obj.ramanPumpNm-1e-7*f));
-            
-            %group various schemes into new objects
-            schemeList = {'GS Raman','ES Raman','Transient Reflectance'};
-            nSchemes = length(schemeList);
-            tsArray = repmat(fsrs(),nSchemes,1);
-            
-            %todo: redesign how this works...
-            for ii = 1:nSchemes
-                loc = strcmp(obj.schemes,schemeList(ii));
-                if any(loc)
-                    tsArray(ii) = obj;
-                    tsArray(ii).spectra = obj.spectra(:,:,:,:,loc);
-                    tsArray(ii).spectra_std = obj.spectra(:,:,:,:,loc);
-                end
+            while argInd <= nargin  %loop until the end of varargin is reached
+               if ischar(superClassArgs{argInd})    %ensure the current argument is of type char (i.e. a keyword and not numeric/cell)
+                   cmpArgInd = strcmp(superClassArgs{argInd},fsrsKeywords);
+                   if any(cmpArgInd)  %if the argument matches any of the fsrs keywords
+                       %Ensure that the passed argument name is unique
+                       assert(sum(cmpArgInd)==1,'Multiple fsrs arguments with the same name are not allowed.');
+                       
+                       %Distribute arguments to sub and superclass arg cell arrays
+                       subClassArgs(argInd:argInd+fsrsArgLen(cmpArgInd)-1) = superClassArgs(argInd:argInd+fsrsArgLen(cmpArgInd)-1);   %copy fsrs args into fsrs arg list
+                       superClassArgs(argInd:argInd+fsrsArgLen(cmpArgInd)-1) = {[]}; %set the transientSpectra keyword and antecedent values to empty (flag for removal)
+                       argInd = argInd + fsrsArgLen;    %update iterator by argument length
+                   else %this is a superclass argument
+                       argInd = argInd + 1;    %update iterator by 1
+                   end
+               else %this is a superclass argument
+                   argInd = argInd + 1;    %update iterator by 1
+               end
             end
             
-            %set output objects
-            objGsFsrs = tsArray(1);
-            objEsFsrs = tsArray(2);
-            objTR = tsArray(3);
+            % remove empty cell elements
+            subClassArgs = subClassArgs(~cellfun(@isempty,subClassArgs));
+            superClassArgs = superClassArgs(~cellfun(@isempty,superClassArgs));
+            nSubClassArgs = numel(subClassArgs);
             
-            %set output object units
-            objGsFsrs = objGsFsrs.setUnits('rcm-1','ps','%Gain'); %change to raman shift, ps, and raman gain
-            objEsFsrs = objGsFsrs.setUnits('rcm-1','ps','%Gain'); %change to raman shift, ps, and raman gain
-            objTR = objTR.setUnits('eV','ps','mOD'); %change to raman shift, ps, and raman gain
+        %%--BUILD SUPERCLASS OBJECT--%%
+            obj = obj@transientSpectra(superClassArgs{:}); 
             
-        end
+        %%--PARSE SUBCLASS ARGS--%%
+           %Default options for fsrs
+           doSplitSchemes = false;
         
+           %To support object arrays, inputs classes will be queried as
+           %elements of cell arrays. If the input is not a cell array,
+           %convert it to a cell array first.
+           for ii = 1:nSubClassArgs %loop over fsrs args
+               if ~iscell(subClassArgs{ii}) %if input is not already a cell
+                   subClassArgs{ii} = {subClassArgs{ii}}; %convert non-cell varargin elements to cell
+               end
+           end
+           
+           %get object size to be able to assign values to each element individually
+           objSize = size(obj); %original object size
+           argNumel = numel(obj);   %number of object elements (and cell length of expected inputs)
+           obj = obj(:);    %for easy looping/assignemnt
+           
+           %loop over arguments and parse keywords/name-value pairs
+           argInd = 1;
+           while argInd <= nSubClassArgs
+               %each keyword or name-value pair must start with a char argument
+               assert(ischar(subClassArgs{argInd}{1}),['Expected element or cell array of chars for ',...
+                      'keywords or name-value pairs. Got ' class(subClassArgs{argInd}{1}) '.']);
+               
+               %parse the keyword in the current index
+               switch subClassArgs{argInd}{1}
+                   case 'ramanPumpNm'   %assign the raman pump wavelength
+                       %perform checks on value input type
+                       assert(argInd+1<=nSubClassArgs,'Name-value pair ramanPumpNm requires an additional double input');
+                       assert(isscalar(subClassArgs{argInd+1}{1}),'Name-value pair ramanPumpNm requires an additional',...
+                              ' scalar or cell array of scalar input.');  
+                       assert(any(numel(subClassArgs{argInd+1})==[1,argNumel]),['The number of ramanPumpNm must be 1 or',...
+                              'match the number of objects. Expected 1 or ' num2str(argNumel) ' elements, got ',...
+                               num2str(numel(subClassArgs{argInd+1})) ' elements.']); 
+                           
+                       %assign array of arguments directly using deal. This works for both 1 or several pump wavelengths
+                       [obj(:).ramanPumpNm] = deal(subClassArgs{argInd+1}{:});
+                       argInd = argInd + 2;
+                   otherwise %throw error to avoid infinite loop
+                       error([subClassArgs{argInd}{1} ' is an unsupported keyword or name-value pair.']);
+               end
+           end
+           
+        %%--FINAL OBJECT FORMATTING--%%
+           % reshape object to match input array size
+           obj = reshape(obj, objSize);
+        end
+                
         %%GET/SET METHODS%% 
         
         %Set the raman pump nm. This updates the raman shift unit
         %definition, which is why it requires an explicit set method.
         function obj = set.ramanPumpNm(obj,newNm)
+            
             obj.ramanPumpNm = newNm;
+            
             %todo: figure out how to do this for all properties that might
             %have unit changes. Maybe cosmetic struct has .wavelengths,
             %.delays and .spectra properties
@@ -80,6 +120,49 @@ classdef fsrs < transientSpectra
                 @(f) 1./(1/obj.ramanPumpNm-1e-7*f));
         end
         
+    end
+    
+    methods (Access = protected)
+        %override superclass convertDH method to convert multi-scheme data
+        %into specific scheme objects. Call this to load multiple objects
+        function obj = convertDH(obj, dh_static, dh_array)
+        % CONVERTDH for fsrs class calls transientSpectra convertDH and assigns
+        % fsrs specific units to the spectra, wavelengths, and delays.
+            
+            %call parent method first for generic conversion of dh_array to transientSpectra
+            obj = convertDH@transientSpectra(obj, dh_static, dh_array);
+            
+            %add unit rules to spectra, delays, etc. todo: add to method or as a subclass of doubleWithUnits class
+            %spectra
+            spectraRules = doubleWithUnits([],obj.spectra);
+            spectraRules = spectraRules.addRule('mOD','\DeltaAbs. (mOD)',@(f) 1e3*f, @(f) 1e-3*f);
+            spectraRules = spectraRules.addRule('%Gain','Raman Gain (%)',@(f) 1e2*(10.^f-1), @(f) log10(1+1e-2*f));
+            spectraRules = spectraRules.addRule('ppmGain','Raman Gain (ppm)',@(f) 1e6*(10.^f-1), @(f) log10(1+1e-6*f));
+            
+            %delays
+            delayRules = doubleWithUnits([],obj.delays);
+            delayRules = delayRules.addRule('fs','Delay (fs)',@(f) 1e3*f, @(f) 1e-3*f);
+            delayRules = delayRules.addRule('ns','Delay (ns)',@(f) 1e-3*f, @(f) 1e3*f);
+            delayRules = delayRules.addRule('us','Delay (\ms)',@(f) 1e-6*f, @(f) 1e6*f);
+            
+            %wavelengths
+            wlRules = doubleWithUnits([],obj.wavelengths);            
+            wlRules = wlRules.addRule('um','Wavelength (\mm)',@(f) 1e3*f, @(f) 1e-3*f);
+            wlRules = wlRules.addRule('eV','Energy (eV)',@(f) 1239.8./f, @(f) 1239.8./f);
+            wlRules = wlRules.addRule('ecm-1','Wavenumber (cm^{-1})',@(f) 1e7./f, @(f) 1e7./f);
+            wlRules = wlRules.addRule('rcm-1','Raman Shift (cm^{-1})',...
+                @(f) 1e7*(1/obj.ramanPumpNm-1./f),...
+                @(f) 1./(1/obj.ramanPumpNm-1e-7*f));
+            
+            %update object data to include new units
+            obj.spectra = doubleWithUnits(obj.spectra.data,spectraRules);
+            obj.spectra_std = doubleWithUnits(obj.spectra_std.data,spectraRules);
+            obj.delays = doubleWithUnits(obj.delays.data,delayRules);
+            obj.wavelengths = doubleWithUnits(obj.wavelengths.data,wlRules);
+            
+            %set default units
+            obj = obj.setUnits('rcm-1','ps','mOD');
+        end
     end
     
     % Methods specific to the fsrs class that cannot be implemented in the transientSpectra class
@@ -117,7 +200,7 @@ classdef fsrs < transientSpectra
         %       searched.
            
             %Default parameters
-            pumpGuessNm = obj.ramanPumpNm;    %initial guess for search in nm
+            pumpGuessNm = obj(1).ramanPumpNm;    %initial guess for search in nm
             thresholdNm = 10; %+/- search range around initial guess in nm
             dropGPos = [];  %grating positions to automatically exclude
             
@@ -142,64 +225,74 @@ classdef fsrs < transientSpectra
                 end
             end
             
-            %remember old units
-            tmpUnits = cell(3,1);
-            [tmpUnits{:}] = obj.getUnits();
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
             
-            %update units to units where x-axis is in nm and raman pump scatter is positive
-            obj = obj.setUnits('nm',[],'%Gain');
-            
-            subObj = obj.trim('wavelengths',pumpGuessNm+thresholdNm*[-1,1]);
-            
-            %get a single spectra by averaging over any extra dims except grating position (up to 5)
-            data = permute(mean(subObj.spectra.data,[2, 3, 5]),[1,4,2,3,5]); 
-            
-            %sort data and wavelengths by ascending order in grating position
-            [gPosSorted,gInd] = sort(subObj.gPos);
-            data = data(:,gInd);
-            lambda = subObj.wavelengths.data(:,gInd);
-            
-            %find the raman pump peak (should be strongest signal)
-            [maxVal,maxInd] = max(data);
-            
-            %find peak base (should be close to lowest signal)
-            minVal = min(data);
-            
-            %find pump peak fwhm while looping over sorted grating positions that do not get dropped
-            pumpNm = NaN*zeros(1,subObj.sizes.nGPos);
-            for ii = 1:subObj.sizes.nGPos
-                %perform the fwhm routine only if the grating position is not dropped
-                if ~any(dropGPos == gPosSorted(ii))
-                    %find all "fwhm" intercepts in data. Sort in case lambda nm values
-                    %are not sorted in ascending order.
-                    intVals = sort(findGridIntercepts(lambda(:,ii),data(:,ii),minVal(ii)+(maxVal(ii)-minVal(ii))/2));
+            for objInd = 1:objNumel
+                %remember old units
+                tmpUnits = cell(3,1);
+                [tmpUnits{:}] = obj(objInd).getUnits();
 
-                    %Use the maximum point as an initial guess
-                    pumpNm(ii) = lambda(maxInd(ii),ii);
+                %update units to units where x-axis is in nm and raman pump scatter is positive
+                obj(objInd) = obj(objInd).setUnits('nm',[],'%Gain');
 
-                    %If two or more points are available, update initial guess
-                    %as average of fwhm values
-                    if length(intVals) > 1
-                        lowPts = intVals(intVals<pumpNm(ii));  %intercepts lower in nm value than the peak
-                        highPts = intVals(intVals>pumpNm(ii)); %intercepts higher in nm value than the peak
-                        if ~isempty(lowPts) && ~isempty(highPts)  %if both a higher and lower point exist
-                            pumpNm(ii) = (lowPts(end) + highPts(1))/2; %take the average to be the peak center
+                subObj = obj(objInd).trim('wavelengths',pumpGuessNm+thresholdNm*[-1,1]);
+
+                %get a single spectra by averaging over any extra dims except grating position (up to 5)
+                data = permute(mean(subObj.spectra.data,[2, 3, 5]),[1,4,2,3,5]); 
+
+                %sort data and wavelengths by ascending order in grating position
+                [gPosSorted,gInd] = sort(subObj.gPos);
+                data = data(:,gInd);
+                lambda = subObj.wavelengths.data(:,gInd);
+
+                %find the raman pump peak (should be strongest signal)
+                [maxVal,maxInd] = max(data);
+
+                %find peak base (should be close to lowest signal)
+                minVal = min(data);
+
+                %find pump peak fwhm while looping over sorted grating positions that do not get dropped
+                pumpNm = NaN*zeros(1,subObj.sizes.nGPos);
+                for ii = 1:subObj.sizes.nGPos
+                    %perform the fwhm routine only if the grating position is not dropped
+                    if ~any(dropGPos == gPosSorted(ii))
+                        %find all "fwhm" intercepts in data. Sort in case lambda nm values
+                        %are not sorted in ascending order.
+                        intVals = sort(findGridIntercepts(lambda(:,ii),data(:,ii),minVal(ii)+(maxVal(ii)-minVal(ii))/2));
+
+                        %Use the maximum point as an initial guess
+                        pumpNm(ii) = lambda(maxInd(ii),ii);
+
+                        %If two or more points are available, update initial guess
+                        %as average of fwhm values
+                        if length(intVals) > 1
+                            lowPts = intVals(intVals<pumpNm(ii));  %intercepts lower in nm value than the peak
+                            highPts = intVals(intVals>pumpNm(ii)); %intercepts higher in nm value than the peak
+                            if ~isempty(lowPts) && ~isempty(highPts)  %if both a higher and lower point exist
+                                pumpNm(ii) = (lowPts(end) + highPts(1))/2; %take the average to be the peak center
+                            end
                         end
-                    end
-                end %dropped grating position
-            end %for loop
+                    end %dropped grating position
+                end %for loop
+
+                %average the results over non-dropped grating positions
+                pumpNm = mean(pumpNm(~isnan(pumpNm)));
+
+                %make sure pumpNm is not NaN or empty before assigning value
+                assert(~isempty(pumpNm) && ~isnan(pumpNm),['Failed to find center wavelength for' obj(objInd).name]);
+
+                %update the raman pump wavelength
+                obj(objInd).ramanPumpNm = pumpNm;
+
+                %set units back to input units
+                obj(objInd) = obj(objInd).setUnits(tmpUnits{:});
+            end
             
-            %average the results over non-dropped grating positions
-            pumpNm = mean(pumpNm(~isnan(pumpNm)));
-            
-            %make sure pumpNm is not NaN or empty before assigning value
-            assert(~isempty(pumpNm) && ~isnan(pumpNm),['Failed to find center wavelength for' obj.desc.name]);
-            
-            %update the raman pump wavelength
-            obj.ramanPumpNm = pumpNm;
-            
-            %set units back to input units
-            obj = obj.setUnits(tmpUnits{:});
+            %convert object array back to original size
+            obj = reshape(obj,objSize);
         end
         
     end
