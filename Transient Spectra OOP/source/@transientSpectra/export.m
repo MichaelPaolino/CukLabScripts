@@ -58,6 +58,8 @@ function outputStruct = export(obj,filePath,varargin)
     objNumel = numel(obj);
     obj = obj(:);
     
+    %todo: figure out if scheme naming is needed or not
+    
     for objInd = 1:objNumel
     
         %set default export options for data. By default either a contour is
@@ -69,13 +71,14 @@ function outputStruct = export(obj,filePath,varargin)
                           'spectra',  obj(objInd).sizes.nDelays == 1,... %by default false if there are multiple delays
                           'contours', obj(objInd).sizes.nDelays > 1);    %true if multiple delays
 
-        %by default, append data to exisitng file
+        %function defaults
         appendFile = false;
         averageFlag = true;
-
+        realFlag = false;
+        
         %set default naming options for exported data when there are multiple schemes and grating positions
         nameFlag = struct('shortName', true,... %show the short name
-                          'scheme', false,...   %show the scheme name
+                          'scheme', true,...   %show the scheme name
                           'gPos', false,...     %show the grating position
                           'rpts', false,...     %show the rpt number
                           'delay', false,...    %show the delay number
@@ -105,7 +108,9 @@ function outputStruct = export(obj,filePath,varargin)
                     case 'average'  %user wants to change default average behavior
                         averageFlag = varargin{ii+1};
                     case 'append'   %user wants to change append to file setting
-                        appendFile = varargin{ii+1};    
+                        appendFile = varargin{ii+1};
+                    case 'real'    %user wants to force all export flags to be real
+                        realFlag = varargin{ii+1};
                     otherwise
                         error([varargin{ii} ' is not a valid argument name.']); 
                 end
@@ -197,7 +202,7 @@ function outputStruct = export(obj,filePath,varargin)
                 for gPosInd = 1:obj(objInd).sizes.nGPos
                     for rptInd = 1:obj(objInd).sizes.nRpts
                         %update the delay name values to the actual delay values for this repeat and grating position
-                        spectraName = spectraName.modify('delay.values',strcat(strtrim(cellstr(num2str(delaySubVal(:,rptInd,gPosInd),3))), ' ', unitStr.wl));
+                        spectraName = spectraName.modify('delay.values',strcat(strtrim(cellstr(num2str(delaySubVal(:,rptInd,gPosInd),3))), ' ', unitStr.delay));
                         for delayInd = delaySubInds(:,rptInd,gPosInd)'
                             if ~isnan(delayInd)
                                 %assign name and data with name autoindexing
@@ -321,7 +326,13 @@ function outputStruct = export(obj,filePath,varargin)
             %add trace waves to output structure
             outputStruct = [outputStruct; waves(~strcmp({waves.name},''))]; 
         end
-
+        
+        %forces all waves and matricies to be real valued
+        if realFlag
+            realData = cellfun(@real,{outputStruct(:).data},'UniformOutput',false);
+            [outputStruct(:).data] = deal(realData{:});
+        end
+        
         %Convert outputStruct name to structure with field names and save as a
         %file
         fullNames = {outputStruct.name}';
@@ -332,7 +343,9 @@ function outputStruct = export(obj,filePath,varargin)
         saveCell = [validNames, {outputStruct.data}']';
         saveStruct = struct(saveCell{:});
         
-        if objInd == 2
+
+        
+        if objInd > 1
             appendFile = true;
         end
         
