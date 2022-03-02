@@ -2,13 +2,13 @@
 %% constructors
 myTS = transientSpectra();
 
-myTS = transientSpectra('Sample_None_Methanol.mat');
+myTS = transientSpectra('Sample_BSP_Water_rpts_schemes_gpos_delays.mat');
 
-myTS = transientSpectra({'Sample_None_Methanol.mat','Sample_None_Methanol.mat','Sample_None_Methanol.mat'});
+myTS = transientSpectra({'Sample_BSP_Water_rpts_schemes_gpos_delays.mat','Sample_BSP_Water_rpts_schemes_gpos_delays.mat','Sample_BSP_Water_rpts_schemes_gpos_delays.mat'});
 
-inputTable = {'spectra 1', 'Sample_None_None.mat';...
-              'spectra 1', 'Sample_None_None.mat';...
-              'spectra 1', 'Sample_None_None.mat'};    
+inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
+              'spectra 2', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
+              'spectra 3', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat'};    
 
 myTS = transientSpectra(inputTable(:,2),'short name',inputTable(:,1));
 
@@ -62,11 +62,10 @@ assert(all(strcmp(schemeList,{'Electronic Background';'Transient Reflectance'}))
 
 %% support functions
 function obj = testObjArray()
-    inputTable = {'spectra 1', 'Sample_None_None.mat';...
-                  'spectra 2', 'Sample_None_None.mat';...
-                  'spectra 3', 'Sample_None_None.mat';...
-                  'spectra 4', 'Sample_None_None.mat'};
-
+    inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
+                  'spectra 2', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
+                  'spectra 3', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
+                  'spectra 4', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat'};
 
     obj = transientSpectra(inputTable(:,2),'short name',inputTable(:,1));
 end

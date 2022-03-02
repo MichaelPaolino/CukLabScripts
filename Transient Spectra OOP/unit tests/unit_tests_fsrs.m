@@ -33,13 +33,13 @@ myFSRS = fsrs('Sample_None_Methanol.mat','short name','methanol','ramanPumpNm',3
 assert(myFSRS.ramanPumpNm == 397.6, 'failed to assign raman pump wavelength');
 
 % load a multi-scheme data set 
-myFSRS = fsrs('Sample_None_None.mat');
+myFSRS = fsrs('Sample_BSP_Water_rpts_schemes_gpos_delays.mat');
 assert(length(myFSRS.schemes) == 5, 'Failed to load multi-scheme data set into fsrs object');
 
 % load a data set array
-inputTable = {'spectra 1', 'Sample_None_None.mat';...
-              'spectra 2', 'Sample_None_None.mat';...
-              'spectra 3', 'Sample_None_None.mat'};    
+inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
+              'spectra 2', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
+              'spectra 3', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat'};    
 
 myFSRS = fsrs(inputTable(:,2),'short name',inputTable(:,1),'ramanPumpNm',397.6);
 assert(all(size(myFSRS)==[3,1]),'Failed to construct fsrs object array');
@@ -60,18 +60,18 @@ assert(strcmp(wlUnit{1},'nm')&&strcmp(wlUnit{2},'rcm-1')&&strcmp(delayUnit{3},'p
 myFSRS = testObjArray1();
 
 myFSRS = myFSRS.average;
-assert(all(size(myFSRS(1).spectra)==[1340,35,1,2,5]),'Failed to average repeats for object array');
+assert(all(size(myFSRS(1).spectra)==[1340,19,1,2,5]),'Failed to average repeats for object array');
 
 myFSRS = myFSRS.stitch;
-assert(all(size(myFSRS(1).spectra)==[1340,35,1,1,5]),'Failed to stitch grating positions for object array');
+assert(all(size(myFSRS(1).spectra)==[2472,19,1,1,5]),'Failed to stitch grating positions for object array');
 
 myFSRS = myFSRS.setUnits('nm','ps',[]);
 
-myFSRS2 = myFSRS.subset('wavelengths',[50:5:150],'delays',[0:1e7:2e8]);
-assert(all((myFSRS2(1).wavelengths-(50:5:150)')<1e-6) && all(myFSRS2(3).delays == [0, 1e7, 2e7, 3e7, 3.4e7]'), 'Failed to subset object array');
-
-myFSRS2 = myFSRS.trim('wavelengths',[10 50],'delays',[-2, 2e8]);
-assert(all((myFSRS2(1).wavelengths-(10:1:50)')<1e-6) && all(myFSRS2(3).delays == (0:1e6:34e6)'), 'Failed to trim object array');
+% myFSRS2 = myFSRS.subset('wavelengths',[380:5:450],'delays',[-5:5:20]);
+% assert(all((myFSRS2(1).wavelengths-(50:5:150)')<1e-6) && all(myFSRS2(3).delays == [0, 1e7, 2e7, 3e7, 3.4e7]'), 'Failed to subset object array');
+% 
+% myFSRS2 = myFSRS.trim('wavelengths',[380 50],'delays',[-2, 2e8]);
+% assert(all((myFSRS2(1).wavelengths-(10:1:50)')<1e-6) && all(myFSRS2(3).delays == (0:1e6:34e6)'), 'Failed to trim object array');
 
 %% Test fsrs object properties get/set
 myFSRS = testObjArray2();
@@ -87,7 +87,7 @@ myTR.plotSpectra();
 
 % plot all TR spectra without the legend
 figure;
-myTR.plotSpectra('no legend');
+myTR.plotSpectra('legend', false);
 
 % plot a delay subset of TR spectra in the delay vector. The option change
 % uses a name-value pair
@@ -148,19 +148,19 @@ myFSRS = myFSRS.findRamanPumpNm();
 
 figure; hold on; box;
 myFSRS2 = myFSRS.stitch('average');
-myFSRS2.plotSpectra('no legend');
+myFSRS2.plotSpectra('legend', false);
 
 myFSRS2 = myFSRS.stitch('lower');
-myFSRS2.plotSpectra('no legend');
+myFSRS2.plotSpectra('legend', false);
 
 myFSRS2 = myFSRS.stitch('upper');
-myFSRS2.plotSpectra('no legend');
+myFSRS2.plotSpectra('legend', false);
 
 myFSRS2 = myFSRS.stitch('half');
-myFSRS2.plotSpectra('no legend');
+myFSRS2.plotSpectra('legend', false);
 
 myFSRS2 = myFSRS.stitch('linear');
-myFSRS2.plotSpectra('no legend');
+myFSRS2.plotSpectra('legend', false);
 
 %default call test
 myFSRS2 = myFSRS.stitch();
@@ -173,13 +173,14 @@ xlim([-1000 3500]);
 %% plotTrace tests
 %load a test data set (acquisition)
 myTR = fsrs('Sample_BSP_Air.mat');
+myTR = myTR.setUnits('nm',[],[]);
 
 figure;
-myTR.plotTrace('wavelengths',[380,400,420,440]);
+myTR.plotKinetics('wavelengths',[380,400,420,440]);
 xlim([145 147]);
 
 figure;
-myTR.plotTrace('wavelengths',[350:5:500],'no legend');
+myTR.plotKinetics('wavelengths',[350:5:500],'legend', false);
 
 %% Test subset data
 %spectra subset
@@ -187,52 +188,52 @@ myTR.plotTrace('wavelengths',[350:5:500],'no legend');
 myFSRS = fsrs('Sample_OC_D2O.mat');
 figure;
 myFSRS = myFSRS.subset('wavelengths',-5000:1:5000);
-myFSRS.plotSpectra('no legend');
+myFSRS.plotSpectra('legend', false);
 
 %Multi-d data sparse subset
 myFSRS = fsrs('Sample_OC_D2O.mat');
 figure;
 myFSRS = myFSRS.subset('wavelengths',-1000:100:1000);
-myFSRS.plotSpectra('no legend');
+myFSRS.plotSpectra('legend', false);
 
 %1-d data dense subset
 myFSRS = fsrs('Sample_OC_D2O.mat');
 figure;
 myFSRS = myFSRS.stitch();
 myFSRS = myFSRS.subset('wavelengths',-5000:1:5000);
-myFSRS.plotSpectra('no legend');
+myFSRS.plotSpectra('legend', false);
 
 %1-d data sparse subset
 myFSRS = fsrs('Sample_OC_D2O.mat');
 figure;
 myFSRS = myFSRS.stitch();
 myFSRS = myFSRS.subset('wavelengths',-1000:100:1000);
-myFSRS.plotSpectra('no legend');
+myFSRS.plotSpectra('legend', false);
 %%
 %delay subset
 myTR = fsrs('Sample_BSP_Air.mat');
 figure;
 myTR.wavelengths.unit = 'nm';
 myTR = myTR.subset('delays',[90:0.15:147]);
-myTR.plotTrace('wavelengths',[380,400,420,440],'no legend');
+myTR.plotKinetics('wavelengths',[380,400,420,440],'legend', false);
 
 %% Test trimming data
 %spectra trim
 myFSRS = fsrs('Sample_OC_D2O.mat');
 figure;
 myFSRS = myFSRS.trim('wavelengths',[-5000 5000]);
-myFSRS.plotSpectra('no legend','*');
+myFSRS.plotSpectra('legend', false, '*');
 myFSRS = myFSRS.trim('wavelengths',[-1000 1000]);
-myFSRS.plotSpectra('no legend','*');
+myFSRS.plotSpectra('legend', false, '*');
 
 %delay trim
 myTR = fsrs('Sample_BSP_Air.mat');
 figure;
 myTR = myTR.setUnits('nm',[],[]);
-myTR.plotTrace('wavelengths',[380,400,420,440],'no legend','*');
+myTR.plotKinetics('wavelengths',[380,400,420,440],'legend',false,'*');
 figure;
 myTR = myTR.trim('delays',[140,155]);
-myTR.plotTrace('wavelengths',[380,400,420,440],'no legend','*');
+myTR.plotKinetics('wavelengths',[380,400,420,440],'legend',false,'*');
 
 %test trimming data and finding pump wavelength
 myFSRS = fsrs('Sample_OC_D2O.mat');
@@ -241,11 +242,11 @@ myFSRS = myFSRS.stitch();
 myFSRS = myFSRS.findRamanPumpNm();
 
 figure;
-myFSRS.plotSpectra();
+myFSRS.plotSpectra('legend',false);
 ylim([-0.5 1]);
 
 %% Test interpoalting data
-myFSRS = loadPath(fsrs(),'Sample_OC_D2O.mat');
+myFSRS = fsrs('Sample_OC_D2O.mat');
 myFSRS = myFSRS.findRamanPumpNm();
 myFSRS = myFSRS.interp('wavelengths',-1000:1:1000);
 
@@ -278,16 +279,16 @@ disp('All tests passed!');
 %% Test specific functions
 function obj = testObjArray1()
     % load a data set array
-    inputTable = {'spectra 1', 'Sample_None_None.mat';...
-                  'spectra 2', 'Sample_None_None.mat';...
-                  'spectra 3', 'Sample_None_None.mat'};    
+    inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
+                  'spectra 2', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
+                  'spectra 3', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat'};    
 
     obj = fsrs(inputTable(:,2),'short name',inputTable(:,1),'ramanPumpNm',397.6);
 end
 
 function obj = testObjArray2()
     % load a data set array
-    inputTable = {'spectra 1', 'Sample_None_Methanol.mat';...
+    inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
                   'spectra 2', 'Sample_OC_D2O.mat'};    
 
     obj = fsrs(inputTable(:,2),'short name',inputTable(:,1),'ramanPumpNm',397.6);

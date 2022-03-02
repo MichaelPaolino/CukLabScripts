@@ -7,7 +7,7 @@ classdef transientSpectra
         delays = doubleWithUnits();   %[delays, repeats, grating pos]
         gPos = zeros(); %[]
         
-        %identifying information: todo (?): convert to class
+        %identifying information
         name = '';
         shortName = '';
         description = '';
@@ -38,7 +38,8 @@ classdef transientSpectra
     end
     
     properties %(Access = protected)
-       isDefault = true; 
+       isDefault = true;
+       displayNames = nameRule();
     end
     
     %methods that children classes must implement:
@@ -262,6 +263,11 @@ classdef transientSpectra
         % is the same size as the object array.
         %
         % logicalOut = obj.CONTAINSSCHEME(targetScheme)
+        %
+        % [logicalOut, ind] = obj.CONTAINSSCHEME(targetScheme)
+        %   Returns an additional logical ind that indicates at which index the 
+        %   target scheme is present. The size of ind is:
+        %   [max number of schemes in any object element, [objSize]]
 
             %prepare object array for data access
             objSize = size(obj);
@@ -274,47 +280,83 @@ classdef transientSpectra
             %loop over object elements to see if its scheme list contains
             %the targetScheme
             logicalOut = false(objNumel,1);
-            ind = false(objNumel,max(cellfun(@length,schemeList)));
+            ind = false(max(cellfun(@length,schemeList)),objNumel);
             for ii = 1:objNumel
                tmp = strcmp(targetScheme,schemeList{ii});
-               ind(ii,1:length(tmp)) = tmp;
-               logicalOut(ii) = any(ind(ii,:));
+               ind(1:length(tmp),ii) = tmp;
+               logicalOut(ii) = any(ind(:,ii));
             end
             
             %convert the array size of logical out to the original object array size
             logicalOut = reshape(logicalOut,objSize);
+            ind = reshape(ind,[size(ind,1),objSize]);
         end
         
-        function [commonSchemes,ind] = getCommonSchemes(obj)
+        function [uniqueSchemes, ind] = getUniqueSchemes(obj)
+        % GETUNIQUECHEMES returns a cell array of all unique scheme names contained
+        % in the object array.
+        %
+        % uniqueSchemes = obj.GETUNIQUECHEMES(targetScheme)
+        %   Returns a cell array of chars that contain the unique scheme names in 
+        %   the obj array.  
+        %
+        % [uniqueSchemes, ind] = obj.GETUNIQUECHEMES(targetScheme)
+        %   Returns an additional logical ind that indicates in dim 1 at which index
+        %   each  unique scheme is present. The size of ind is:
+        %   [max number of schemes in any object element, nUniqueSchemes, [objSize]] 
+        
+            %prepare object array for data access
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            %Get unique schemes out of the object
+            schemeList = {obj.schemes};
+            schemeListAll = vertcat(schemeList{:}); %a cell array of all schemes with char as elements
+            uniqueSchemes = unique(schemeListAll); %unique schemes inside the object array
+            
+            %return index of unique scheme
+            nUniqueSchemes = length(uniqueSchemes);          
+            ind = false(max(cellfun(@length,schemeList)),nUniqueSchemes,objNumel);
+            for ii = 1:nUniqueSchemes
+                [~,ind(:,ii,:)] = containsScheme(obj,uniqueSchemes{ii});
+            end
+            
+            %return indecies as original size of object
+            %[scheme index, unique scheme, [objSize]]
+            ind = reshape(ind, [size(ind,1), size(ind,2), objSize]);
+
+        end
+        
+        function [commonSchemes, ind] = getCommonSchemes(obj)
         % GETCOMMONSCHEMES returns a cell array of scheme names that are common to 
         % all elements of the object array.
         %
         % commonSchemes = obj.GETCOMMONSCHEMES()
+        %   Returns a cell array of chars that contain the common scheme names in 
+        %   the obj array.
+        %
+        % [commonSchemes, ind] = obj.GETCOMMONSCHEMES()
+        %   Returns an additional logical ind that indicates in dim 1 at which 
+        %   index the scheme is present. The size of ind is:
+        %   [max number of schemes in any object element, nCommonSchemes,[objSize]]
 
             %prepare object array for data access
-            objNumel = numel(obj);
+            objSize = size(obj);
             obj = obj(:);
             
-            %get cell of all schemes to determine scheme names in the array
-            %that are common to all elements
-            schemeList = {obj.schemes};
-            schemeListAll = vertcat(schemeList{:}); %a cell array of all schemes with char as elements
-            uniqueSchemes = unique(schemeListAll); %unique schemes inside the object array
-            nSchemes = length(uniqueSchemes);   %number of unique schemes
-            nSchemesAll = cellfun(@length,schemeList); %length of the schemes for each object array element
+            %get unique schemes and their indicies from the object array
+            [uniqueSchemes, ind] = obj.getUniqueSchemes();
             
-            %make sure the unique scheme is present in all elements of the object array
-            schemeFound = false(objNumel,nSchemes);
-            ind = false(objNumel,max(nSchemesAll),nSchemes);
-            for ii = 1:nSchemes
-                %to do: how to de-format cell array ind into more useful
-                %datatype
-                [schemeFound(:,ii), ind(:,:,ii)] = obj.containsScheme(uniqueSchemes{ii});
-            end
+            %schemes that are common to all elements of the object array
+            %along object element dim 3 and scheme index dim 1
+            commonInd = all(any(ind,1),3);
+            commonSchemes = uniqueSchemes(commonInd(:));
+            ind = ind(:,commonInd(:),:);
             
-            %schemes that are common to all elements of the object array.
-            %Only these schemes, or a subset, can be returned
-            commonSchemes = uniqueSchemes(all(schemeFound,1)); 
+            %return indecies as original size of object
+            %[scheme index, unique scheme, [objSize]]
+            ind = reshape(ind, [size(ind,1), size(ind,2), objSize]);
         end
         
         function [objOut, schemeList] = splitSchemes(objIn, varargin)
@@ -413,7 +455,8 @@ classdef transientSpectra
             
     end
     
-    %% Protected methods for loading data into object. Use constructor to load data.
+    %% Protected methods (loading data into object)
+    %Use constructor to load data.
     methods (Access = protected)
         %loads a .mat file from a path and converts to a FSRS object
         function varargout = loadPath(obj,myPath)
@@ -450,67 +493,126 @@ classdef transientSpectra
         obj = convertDH(obj, dh_static, dh_array);
     end
     
+    %% Protected methods (General class functionality)
+    methods %(Access = protected)
+        function [obj, unitStr, nameFlag] = buildDisplayNames(obj,varargin)
+        % BUILDDISPLAYNAMES generates a generic name rule for data display and
+        % export. The method updates the displayNames property. Further
+        % modifications can be made by using the nameRule class methods.      
+        
+        %1. set default naming options for exported data when there are multiple schemes and grating positions
+            nameFlag = struct('shortName', length(unique({obj(:).shortName}))>1,...     %show the short name
+                              'label', false,...                                        %show function specific label
+                              'scheme', length(obj.getUniqueSchemes)>1,...              %show the scheme name
+                              'gPos', false,...         %show the grating position
+                              'repeats', false,...      %show the rpt number
+                              'delay', false,...        %show the delay number
+                              'wavelengths', false,...  %show the wavelength number
+                              'spectraUnit', false);    %show the data unit
+        
+        
+        %2. use parser object to override nameFlag values with user arguments 
+            % and pass additional inputs
+            p = inputParser;
+            p.FunctionName = 'buildDisplayNames';
+            
+            %add nameFlag fields in loop so that partial matching can be used
+            paramNames = fieldnames(nameFlag);
+            for ii = 1:length(paramNames)
+                p.addParameter(paramNames{ii}, nameFlag.(paramNames{ii}), @(l)islogical(l));
+            end
+            
+            %parse arguments and collect results
+            p.parse(varargin{:});
+            for ii = 1:length(paramNames)
+                nameFlag.(paramNames{ii}) = p.Results.(paramNames{ii});
+            end
+            
+        %3. define unit strings for each object
+            
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            for objInd = 1:objNumel
+                unitStr = struct('spectra',obj(objInd).spectra.unit,...
+                                 'wl',obj(objInd).wavelengths.unit,...
+                                 'delay',obj(objInd).delays.unit);
+
+            %4. build name rule for each object. NOTE: this does not add wavelength or delay 
+                %strings since these are grating position and can be repeatindex specific
+                obj(objInd).displayNames = nameRule({...
+                    'shortName',  {obj(objInd).shortName},                                                          0, nameFlag.shortName && ~isempty(obj(objInd).shortName);...
+                    'label',      {''},                                                                             0, nameFlag.label;...
+                    'dataUnit',   {['in ' unitStr.spectra]},                                                        0, nameFlag.spectraUnit;...
+                    'scheme',     obj(objInd).schemes,                                                              1, nameFlag.scheme;...
+                    'gPos',       strcat({'gPos: '},strcat(strtrim(cellstr(num2str(obj(objInd).gPos(:))))), ' nm'), 2, nameFlag.gPos;...
+                    'repeats',    strcat({'rpt '}, strtrim(cellstr(num2str((1:obj(objInd).sizes.nRpts)')))),        3, nameFlag.repeats;...
+                    'wl',         {''},                                                                             4, nameFlag.wavelengths;... 
+                    'delay',      {''},                                                                             4, nameFlag.delay});
+
+            %5. reset counter
+                obj(objInd).displayNames = obj(objInd).displayNames.reset;
+            end
+            
+            %convert object array back to original size
+            obj = reshape(obj,objSize);
+        
+        end
+    end
+    
     %% Plotting/contour methods for data display
     methods
         function plotSpectra(obj, varargin)
-            %%**INITIALIZE DEFAULT VALUES**%%
-            %default for delay display: all delays
-            delayVals = 'all';
-            showDelays = true;  %whether to display in legend
             
-            %default for repeat display: average repeats
-%             rpts = [];
-%             nRpts = 1;
-%             showRepeats = false; %whether to display in legend
+        %1. use parser object to override plotFlag values with user arguments and pass extra arguments to plot
+            p = inputParser;
+            p.FunctionName = 'plotSpectra';
+            p.KeepUnmatched = true;
             
-            %default for grating position display: all grating positions
-%             gPosVal = obj.gPos;
-%             nGPos = length(gPosVal);
-%             showGPos = false; %whether to display in legend
+            %default values for flags
+            plotFlag = struct('average',true,...
+                               'legend',true);
             
-            %default for cosmetics
-%             showLegend = true;
+            %allow user to specify axes object with plot
+            p.addOptional('ax',gca,@(ax)isa(ax,'matlab.graphics.axis.Axes'));
+                       
+            %add plotFlag fields in loop so that partial matching can be used    
+            paramNames = fieldnames(plotFlag);
+            for ii = 1:length(paramNames)
+                p.addParameter(paramNames{ii}, plotFlag.(paramNames{ii}), @(l)islogical(l));
+            end
             
-            %todo: decide how to handle NaN points
+            %add delay list with all delays (empty array) as default value
+            p.addParameter('delays',[], @(d) isa(d,'double') && isvector(d));
             
-            %%**UPDATE DEFAULT VALUES FROM USER INPUT**%%
-            %defines additional arguments passed to plot function. There
-            %will also be a cosmetics version of this inside the cosmetic
-            %class.
-            isArgParsed = false(size(varargin));
+            %User may also specify a linespec argument. inputParser is not
+            %smart enough to parse linespec, therefore remove and parse
+            %manually:
+            linespec = '-';
+            for ii = 1:length(varargin)
+                if islinespec(varargin{ii}) %if the input is a linespec
+                    linespec = varargin{ii}; %update linespec value
+                    varargin(ii) = [];  %remove argument from varargin
+                end
+            end
             
-            %change settings from user input
-            if nargin > 1
-                for ii = 1:(nargin-1)   %loop over extra arguments
-                    if ischar(varargin{ii}) %look for 'name' in name-value pair
-                        switch varargin{ii} %switch...case over name if name is encountered
-                            case 'delays'   %plot a subset of delays in data
-                                %update delayVals
-                                delayVals = varargin{ii+1};
-                                
-                                %flag the name-value pair as parsed to remove the args later below
-                                isArgParsed(ii+[0 1]) = [true true];
-                            case 'no legend'
-                                showLegend = false;
-                                
-                                %flag the name as parsed to remove the args later below
-                                isArgParsed(ii) = true;
-                        end %switch varargin{ii}
-                    end %ischar(varargin{ii})
-                end %ii = 1:(nargin-1)
-            end % if nargin > 1
+            %parse arguments and collect results
+            p.parse(varargin{:});
             
-            %Update extra arguments
-            extraArgs = varargin(~isArgParsed);   %add unparsed arguments to extraargs
-                     
-            %generate legend
-            %delayStr = strtrim(cellstr([num2str(delaysVal(:)) repmat(' ps',nDelays,1)]));   %todo: replace ps with cosmetic unit and add option to specificy precision
-            %rptStr = ... %todo: finish rpt formatting
-            %gPosStr = ... %todo: finsih gPos formatting
-            %legendVal = delayStr(:);    %todo: somehow build a legend string depending on user prefs above
-                        
-            %%**GENERATE PLOT**%%
+            %collect flag options
+            for ii = 1:length(paramNames)
+                plotFlag.(paramNames{ii}) = p.Results.(paramNames{ii});
+            end
             
+            %collect delay subset to plot
+            delayVals = p.Results.delays;
+            
+            %collect extra arguments to pass to plot:
+            extraArgs = struct2cell(p.Unmatched);
+            
+        %2. Object pre-formatting to ready data for plot loop
             % Format object array dims into a column for easy looping
             objNumel = numel(obj);
             obj = obj(:);
@@ -521,110 +623,142 @@ classdef transientSpectra
             obj = obj.setUnits(tmpUnits{:});
             
             %average object over repeats
-            obj = obj.average;
+            if plotFlag.average
+                obj = obj.average;
+            end
             
-            %check hold state
+            %Generate object name rule for line/legend display
+            [obj, unitStr] = obj.buildDisplayNames();
+            
+            %check hold state to preserve default axes class display behavior
             holdState = ishold();
-            counter = 1;
-            
-            %Loop over objects
+            firstTime = true;
+        
+        %3. Loop over data, do object index specific formatting, and plot data
             for objInd = 1:objNumel  %loop over elements of object array
                 
                 %if user specified a delay subset, get object subset to plot
-                if isvector(delayVals)
+                if ~isempty(delayVals)
                     obj(objInd) = obj(objInd).subset('delays',delayVals);
                 end
                 
+                %modify legend name rules for specific object element
+                legendNames = obj(objInd).displayNames.modify(...
+                    'gPos.flag',    obj(objInd).sizes.nGPos > 1,...     %if multiple grating positions
+                    'repeats.flag', obj(objInd).sizes.nRpts > 1,...     %this will only display if average is off
+                    'delay.flag',   obj(objInd).sizes.nDelays > 1,...   %display delays
+                    'delay.values', strcat(strtrim(cellstr(num2str(mean(obj(objInd).delays(:,:,:),[2,3]),'%.3g'))), {' '}, unitStr.delay)); %delay values
+                
+                %adjust increment levels to match loop/permute/reshape
+                %order:          pos loop, [spectra, rpts x delays x schemes]
+                %significance:       1                 4       3        2
+                legendNames = legendNames.modify(...
+                    'gPos.level',1,...
+                    'scheme.level',2,...
+                    'repeats.level',4,...
+                    'delay.level',3);
+                
+                %rearrange name display order to match significance order:
+                legendNames = legendNames.rearrange('shortName','gPos','scheme','delay','repeats');
+                
+                %build legend name levels for autoincrementing name across loop
+                legendNames = legendNames.buildLevels();
+                
                 %loop over grating positions
                 for ii = 1:obj(objInd).sizes.nGPos  
-                    %add data to x, y plot
+                    %add data to x, y to plot
                     x = obj(objInd).wavelengths.data(:,ii);
                     
-                    %avg of rpts and pick the first dataScheme. todo: have case that handles whether to average rpts or not
-                    y = obj(objInd).spectra.data(:,:,1,ii,:); %[pixels, delays, rpts, grating pos, schemes]
-                    y = permute(y,[1,2,5,3,4]); %change display priority [pixels, delays, schemes]
-                    y = reshape(y,obj(objInd).sizes.nPixels,[]); %[pixels, delays x schemes]
+                    %avg of rpts and pick the first dataScheme
+                    y = obj(objInd).spectra.data(:,:,:,ii,:); %[pixels, delays, rpts, grating pos, schemes]
+                    y = permute(y,[1,3,2,5,4]); %change display priority [pixels, rpts, delays, schemes,1]
+                    y = reshape(y,obj(objInd).sizes.nPixels,[]); %[pixels, rpts x delays x schemes x 1]
                     
-                    plotArgs = [{x; y}; extraArgs{:}];  %custom generate inputs to pass to plot function
-                    
-                    if counter == 1
-                        plot(plotArgs{:});
-                        hold on;
-                    else
-                        plot(plotArgs{:});
-                    end
-                    
-                    counter = counter + 1;
-                end
-            end
-            
+                    %Loop over columns of y-data to assign a display name for each line
+                    for jj = 1:size(y,2)
+                        %generate legend name
+                        [plotDispStr, legendNames] = legendNames.buildName('autoIncrement',true,'delimiter',', ');
+                        
+                        %custom generate inputs to pass to plot function
+                        plotArgs = [{p.Results.ax}; {x; y(:,jj)}; {linespec}; extraArgs{:}; {'DisplayName'}; {plotDispStr}];  
+                        
+                        %This preserves the default axes class display behavior
+                        if firstTime
+                            plot(plotArgs{:});
+                            firstTime = false;
+                            hold on;
+                        else
+                            plot(plotArgs{:});
+                        end
+                        
+                    end %loop over delays x schemes
+                end %loop over grating positions
+            end %loop over object elements
+        
+        %4. Post-formatting
             %return to previous hold state
             if ~holdState
                 hold off;
             end
             
-            %decide on legend formattiong
-%             if showLegend
-%                legend(legendVal(:)); 
-%                %todo: add multi-d legend display
-%             end
+            %display legend for all lines
+            if plotFlag.legend
+                legend();
+            end
             
+            %update x and y units
             ylabel(obj(1).spectra.dispName);
             xlabel(obj(1).wavelengths.dispName);
         end
         
-        function plotTrace(obj, varargin)
-            %%**INITIALIZE DEFAULT VALUES**%%
-            %default for delay display: all wavelengths or wavenumbers
-            wlVals = 'all';
-            %default for repeat display: average repeats
-%             rpts = [];
-%             nRpts = 1;
-%             showRepeats = false; %whether to display in legend
+        function plotKinetics(obj, varargin)
+        %1. use parser object to override plotFlag values with user arguments and pass extra arguments to plot
+            p = inputParser;
+            p.FunctionName = 'plotTrace';
+            p.KeepUnmatched = true;
             
-            %default for grating position display: all grating positions
-%             gPosVal = obj.gPos;
-%             nGPos = length(gPosVal);
-%             showGPos = false; %whether to display in legend
+            %allow user to specify axes object with plot
+            p.addOptional('ax',gca,@(ax)isa(ax,'matlab.graphics.axis.Axes'));
             
-            %default for cosmetics
-%             showLegend = true;
-                        
+            %default values for flags
+            plotFlag = struct('average',true,...
+                               'legend',true);
             
-            %todo: decide how to handle NaN points
+            %add plotFlag fields in loop so that partial matching can be used
+            paramNames = fieldnames(plotFlag);
+            for ii = 1:length(paramNames)
+                p.addParameter(paramNames{ii}, plotFlag.(paramNames{ii}), @(l)islogical(l));
+            end
             
-            %%**UPDATE DEFAULT VALUES FROM USER INPUT**%%
-            %defines additional arguments passed to plot function. There
-            %will also be a cosmetics version of this inside the cosmetic
-            %class.
-            isArgParsed = false(size(varargin));
+            %add delay list with all delays (empty array) as default value
+            p.addParameter('wavelengths',[], @(d) isa(d,'double') && isvector(d));
             
-            %change settings from user input
-            if nargin > 1
-                for ii = 1:(nargin-1)   %loop over extra arguments
-                    if ischar(varargin{ii}) %look for 'name' in name-value pair
-                        switch varargin{ii} %switch...case over name if name is encountered
-                            case 'wavelengths'   %plot a subset of delays in data
-                                %find unique values and indecies in data delays that best match user value input in name-value pair 
-                                wlVals = varargin{ii+1}(:);
-                                
-                                %flag the name-value pair as parsed to remove the args later below
-                                isArgParsed(ii+[0 1]) = [true true];
-                            case 'no legend'
-                                showLegend = false;
-                                
-                                %flag the name as parsed to remove the args later below
-                                isArgParsed(ii) = true;
-                        end %switch varargin{ii}
-                    end %ischar(varargin{ii})
-                end %ii = 1:(nargin-1)
-            end % if nargin > 1
+            %User may also specify a linespec argument. inputParser is not
+            %smart enough to parse linespec, therefore remove and parse
+            %manually:
+            linespec = '-';
+            for ii = 1:length(varargin)
+                if islinespec(varargin{ii}) %if the input is a linespec
+                    linespec = varargin{ii}; %update linespec value
+                    varargin(ii) = [];  %remove argument from varargin
+                end
+            end
             
-            %Update extra arguments
-            extraArgs = varargin(~isArgParsed);   %add unparsed arguments to extraargs
+            %parse arguments and collect results
+            p.parse(varargin{:});
             
-            %%**GENERATE PLOT**%%
+            %collect flag options
+            for ii = 1:length(paramNames)
+                plotFlag.(paramNames{ii}) = p.Results.(paramNames{ii});
+            end
             
+            %collect delay subset to plot
+            wlVals = p.Results.wavelengths;
+            
+            %collect extra arguments to pass to plot:
+            extraArgs = struct2cell(p.Unmatched);
+            
+        %2. Object pre-formatting to ready data for plot loop
             % Format object array dims into a column for easy looping
             objNumel = numel(obj);
             obj = obj(:);
@@ -635,48 +769,107 @@ classdef transientSpectra
             obj = obj.setUnits(tmpUnits{:});
             
             %average object over repeats
-            obj = obj.average;
+            if plotFlag.average
+                obj = obj.average;
+            end
             
-            %check hold state
+            %Generate object name rule for line/legend display
+            [obj, unitStr] = obj.buildDisplayNames();
+            
+            %check hold state to preserve default axes class display behavior
             holdState = ishold();
-            counter = 1;
-            
-            %Loop over objects
+            firstTime = true;
+        
+        %3. Loop over data, do object index specific formatting, and plot data
             for objInd = 1:objNumel  %loop over elements of object array
                 
                 %if user specified a delay subset, get object subset to plot
-                if isvector(wlVals)
+                if ~isempty(wlVals)
                     obj(objInd) = obj(objInd).subset('wavelengths',wlVals);
                 end
                 
-                %add data to x, y plot
-                x = mean(obj(objInd).delays.data,3);
+                %modify legend name rules for specific object element
+                legendNames = obj(objInd).displayNames.modify(...
+                    'gPos.flag',    obj(objInd).sizes.nGPos > 1,...     %if multiple grating positions
+                    'repeats.flag', obj(objInd).sizes.nRpts > 1,...     %this will only display if average is off
+                    'wl.flag',   obj(objInd).sizes.nDelays > 1,...      %display delays
+                    'wl.values', repmat({''},obj(objInd).sizes.nPixels)); %delay values
+                
+                %adjust increment levels to match loop/permute/reshape
+                %order:          pos loop, [spectra, rpts x wls x schemes]
+                %significance:       1                 4     3       2
+                legendNames = legendNames.modify(...
+                    'gPos.level',1,...
+                    'scheme.level',2,...
+                    'repeats.level',4,...
+                    'wl.level',3);
+                
+                %rearrange name display order to match significance order:
+                legendNames = legendNames.rearrange('shortName','gPos','scheme','wl','repeats');
+                
+                %build legend name levels for autoincrementing name across loop
+                legendNames = legendNames.buildLevels();
+                
+                %loop over grating positions
+                for ii = 1:obj(objInd).sizes.nGPos  
+                    %add data to x, y to plot
+                    x = mean(obj(objInd).delays.data(:,:,ii),2);
+                    
+                    %avg of rpts and pick the first dataScheme
+                    y = obj(objInd).spectra.data(:,:,:,ii,:); %[pixels, delays, rpts, grating pos, schemes]
+                    y = permute(y,[2,3,1,5,4]); %change display priority [delays, rpts, pixels, schemes,1]
+                    y = reshape(y,obj(objInd).sizes.nDelays,[]); %[delays, rpts x pixels x schemes x 1]
+                    
+                    %update wavelength values specific to the grating position
+                    legendNames = legendNames.modify(...
+                        'wl.values', strcat(strtrim(cellstr(num2str(obj(objInd).wavelengths(:,ii),'%.4g'))), {' '}, unitStr.wl));
+                    
+                    %Loop over columns of y-data to assign a display name for each line
+                    for jj = 1:size(y,2)
+                        %check if y-data exists (is not all NaN)
+                        if all(~isnan(y(:,jj)))
+                            %generate legend name
+                            [plotDispStr, legendNames] = legendNames.buildName('autoIncrement',true,'delimiter',', ');
 
-                %avg of rpts and pick the first dataScheme. todo: have case that handles whether to average rpts or not
-                y = obj(objInd).spectra.data(:,:,1,:,:); %[pixels, delays, rpts, grating pos, schemes]
-                y = permute(y,[2,1,4,5,3]); %change display priority [delays, pixels, grating pos, schemes]
-                y = reshape(y,obj(objInd).sizes.nDelays,[]); %[delays, pixels x grating pos x schemes]
+                            %custom generate inputs to pass to plot function
+                            plotArgs = [{p.Results.ax}; {x; y(:,jj)}; {linespec}; extraArgs{:}; {'DisplayName'}; {plotDispStr}];   
 
-                plotArgs = [{x; y}; extraArgs{:}];  %custom generate inputs to pass to plot function
-
-                if counter == 1
-                    plot(plotArgs{:});
-                    hold on;
-                else
-                    plot(plotArgs{:});
-                end
-
-                counter = counter + 1;
-            end
-            
+                            %This preserves the default axes class display behavior
+                            if firstTime
+                                plot(plotArgs{:});
+                                firstTime = false;
+                                hold on;
+                            else
+                                plot(plotArgs{:});
+                            end
+                        else
+                            %This grating position does not contain the specified wavelength. 
+                            %Skip this line and increment name rule
+                            legendNames = legendNames.increment;
+                        end
+                        
+                    end %loop over delays x schemes
+                end %loop over grating positions
+            end %loop over object elements
+        
+        %4. Post-formatting
             %return to previous hold state
             if ~holdState
                 hold off;
             end
+            
+            %display legend for all lines
+            if plotFlag.legend
+                legend();
+            end
+            
+            %update x and y units
+            ylabel(obj(1).spectra.dispName);
+            xlabel(obj(1).delays.dispName);
         end
     end
     
-    %% Data manipulation methods that modify the spectra
+    %% Data manipulation methods that modify the spectra object
     methods
         
         function obj = average(obj)
