@@ -45,6 +45,9 @@ myFSRS = fsrs(inputTable(:,2),'short name',inputTable(:,1),'ramanPumpNm',397.6);
 assert(all(size(myFSRS)==[3,1]),'Failed to construct fsrs object array');
 assert(all([myFSRS.ramanPumpNm]==397.6*ones(1,3)),'Failed to assign raman pump wavelength to fsrs object array');
 
+% load a data set with incomplete data
+myFSRS = fsrs('Sample_S_pH_13100mMNaOH_incomplete.mat');
+
 %% Test working with units
 myFSRS = testObjArray1();
 
@@ -121,8 +124,16 @@ myFSRS.plotSpectra();
 ylim([-2 5]);
 xlim([375 465]);
 
+%% test plotSpectra for incomplete data
+% load a data set with incomplete data
+myFSRS = fsrs('Sample_S_pH_13100mMNaOH_incomplete.mat');
+myFSRS = myFSRS.getScheme('GS Raman');
+figure;
+myFSRS.plotSpectra('delays',[-5,1,5,50,500,1000],'average',false);
+
 %% test updating the raman pump wavelength
 myFSRS = fsrs('Sample_OC_D2O.mat');
+
 myFSRS.ramanPumpNm = 380;
 
 figure;

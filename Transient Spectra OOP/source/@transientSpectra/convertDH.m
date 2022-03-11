@@ -64,9 +64,12 @@ function obj = convertDH(obj, dh_static, dh_array)
         obj.gPos = unique(gpos_tmp);
         obj.sizes.nGPos = length(obj.gPos);
         
-        %this assumes the program finished collecting data. todo: add acquisition settings to dh_static
-        obj.sizes.nDelays = nArray/obj.sizes.nRpts/obj.sizes.nGPos; 
-        obj.delays.data = reshape(delays_tmp, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos); %[delays, repeats, grating positions]
+        %Add delays to object inclusive of incomplete data acquisition
+        %todo: explicity assign number of delays in acquisition program
+        obj.sizes.nDelays = sum(and((gpos_tmp==gpos_tmp(1)),rpts_tmp==rpts_tmp(1)));
+        obj.delays.data = nan(obj.sizes.nDelays*obj.sizes.nRpts*obj.sizes.nGPos,1);
+        obj.delays.data(1:length(delays_tmp)) = delays_tmp;
+        obj.delays.data = reshape(obj.delays.data, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos); %[delays, repeats, grating positions]
         
         %loop through wavelength calibrations for multiple grating positions
         obj.wavelengths.data = zeros(obj.sizes.nPixels, obj.sizes.nGPos);
@@ -91,8 +94,13 @@ function obj = convertDH(obj, dh_static, dh_array)
     obj.spectra_std = obj.spectra_std.changeBaseName('OD','\DeltaAbs. (OD)');
     
     %finally format raw data into final format
-    obj.spectra.data = reshape(spectra_tmp, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
-    obj.spectra_std.data = reshape(spectrastd_tmp, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
+    obj.spectra.data = nan(obj.sizes.nPixels,obj.sizes.nDelays*obj.sizes.nRpts*obj.sizes.nGPos,obj.sizes.nSchemes);
+    obj.spectra.data(:,1:size(spectra_tmp,2),:) = spectra_tmp;
+    obj.spectra.data = reshape(obj.spectra.data, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
+    
+    obj.spectra_std.data = nan(obj.sizes.nPixels,obj.sizes.nDelays*obj.sizes.nRpts*obj.sizes.nGPos,obj.sizes.nSchemes);
+    obj.spectra_std.data(:,1:size(spectrastd_tmp,2),:) = spectrastd_tmp;
+    obj.spectra_std.data = reshape(obj.spectra_std.data, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
 
     %Set a default short name, long name, and description
     obj.description = dh_static.Description;

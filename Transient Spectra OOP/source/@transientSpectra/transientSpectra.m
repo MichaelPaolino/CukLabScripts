@@ -647,7 +647,7 @@ classdef transientSpectra
                     'gPos.flag',    obj(objInd).sizes.nGPos > 1,...     %if multiple grating positions
                     'repeats.flag', obj(objInd).sizes.nRpts > 1,...     %this will only display if average is off
                     'delay.flag',   obj(objInd).sizes.nDelays > 1,...   %display delays
-                    'delay.values', strcat(strtrim(cellstr(num2str(mean(obj(objInd).delays(:,:,:),[2,3]),'%.3g'))), {' '}, unitStr.delay)); %delay values
+                    'delay.values', strcat(strtrim(cellstr(num2str(mean(obj(objInd).delays.data,[2,3],'omitnan'),'%.3g'))), {' '}, unitStr.delay)); %delay values
                 
                 %adjust increment levels to match loop/permute/reshape
                 %order:          pos loop, [spectra, rpts x delays x schemes]
@@ -676,19 +676,24 @@ classdef transientSpectra
                     
                     %Loop over columns of y-data to assign a display name for each line
                     for jj = 1:size(y,2)
-                        %generate legend name
-                        [plotDispStr, legendNames] = legendNames.buildName('autoIncrement',true,'delimiter',', ');
-                        
-                        %custom generate inputs to pass to plot function
-                        plotArgs = [{p.Results.ax}; {x; y(:,jj)}; {linespec}; extraArgs{:}; {'DisplayName'}; {plotDispStr}];  
-                        
-                        %This preserves the default axes class display behavior
-                        if firstTime
-                            plot(plotArgs{:});
-                            firstTime = false;
-                            hold on;
-                        else
-                            plot(plotArgs{:});
+                        if ~all(isnan(y(:,jj))) %make sure there are values to plot
+                            %generate legend name
+                            [plotDispStr, legendNames] = legendNames.buildName('autoIncrement',true,'delimiter',', ');
+
+                            %custom generate inputs to pass to plot function
+                            plotArgs = [{p.Results.ax}; {x; y(:,jj)}; {linespec}; extraArgs{:}; {'DisplayName'}; {plotDispStr}];  
+
+                            %This preserves the default axes class display behavior
+                            if firstTime
+                                plot(plotArgs{:});
+                                firstTime = false;
+                                hold on;
+                            else
+                                plot(plotArgs{:});
+                            end
+                        else %if the spectra is all NaN
+                            %skip plotting in increment legend name
+                            legendNames = legendNames.increment;
                         end
                         
                     end %loop over delays x schemes
