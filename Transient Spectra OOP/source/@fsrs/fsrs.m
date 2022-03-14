@@ -241,7 +241,7 @@ classdef fsrs < transientSpectra
                 subObj = obj(objInd).trim('wavelengths',pumpGuessNm+thresholdNm*[-1,1]);
 
                 %get a single spectra by averaging over any extra dims except grating position (up to 5)
-                data = permute(mean(subObj.spectra.data,[2, 3, 5]),[1,4,2,3,5]); 
+                data = permute(mean(subObj.spectra.data,[2, 3, 5],'omitnan'),[1,4,2,3,5]); 
 
                 %sort data and wavelengths by ascending order in grating position
                 [gPosSorted,gInd] = sort(subObj.gPos);

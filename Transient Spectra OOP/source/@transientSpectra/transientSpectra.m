@@ -587,6 +587,9 @@ classdef transientSpectra
             %add delay list with all delays (empty array) as default value
             p.addParameter('delays',[], @(d) isa(d,'double') && isvector(d));
             
+            %add an option to display the index on the x-axis
+            p.addParameter('index',false, @(l) islogical(l));
+            
             %User may also specify a linespec argument. inputParser is not
             %smart enough to parse linespec, therefore remove and parse
             %manually:
@@ -666,8 +669,13 @@ classdef transientSpectra
                 
                 %loop over grating positions
                 for ii = 1:obj(objInd).sizes.nGPos  
-                    %add data to x, y to plot
+                    %add data to x
                     x = obj(objInd).wavelengths.data(:,ii);
+                    
+                    %if user specified 'index', true option
+                    if p.Results.index
+                        x = 1:length(x);
+                    end
                     
                     %avg of rpts and pick the first dataScheme
                     y = obj(objInd).spectra.data(:,:,:,ii,:); %[pixels, delays, rpts, grating pos, schemes]
@@ -713,7 +721,13 @@ classdef transientSpectra
             
             %update x and y units
             ylabel(obj(1).spectra.dispName);
-            xlabel(obj(1).wavelengths.dispName);
+            
+            %if user specified 'index', true option
+            if p.Results.index
+                xlabel('index'); 
+            else %normal x-axis label display
+                xlabel(obj(1).wavelengths.dispName);
+            end
         end
         
         function plotKinetics(obj, varargin)
@@ -737,6 +751,9 @@ classdef transientSpectra
             
             %add delay list with all delays (empty array) as default value
             p.addParameter('wavelengths',[], @(d) isa(d,'double') && isvector(d));
+            
+            %add an option to display the index on the x-axis
+            p.addParameter('index',false, @(l) islogical(l));
             
             %User may also specify a linespec argument. inputParser is not
             %smart enough to parse linespec, therefore remove and parse
@@ -820,6 +837,11 @@ classdef transientSpectra
                     %add data to x, y to plot
                     x = mean(obj(objInd).delays.data(:,:,ii),2);
                     
+                    %if user specified 'index', true option
+                    if p.Results.index
+                        x = 1:length(x);
+                    end
+                    
                     %avg of rpts and pick the first dataScheme
                     y = obj(objInd).spectra.data(:,:,:,ii,:); %[pixels, delays, rpts, grating pos, schemes]
                     y = permute(y,[2,3,1,5,4]); %change display priority [delays, rpts, pixels, schemes,1]
@@ -832,7 +854,7 @@ classdef transientSpectra
                     %Loop over columns of y-data to assign a display name for each line
                     for jj = 1:size(y,2)
                         %check if y-data exists (is not all NaN)
-                        if all(~isnan(y(:,jj)))
+                        if ~all(isnan(y(:,jj)))
                             %generate legend name
                             [plotDispStr, legendNames] = legendNames.buildName('autoIncrement',true,'delimiter',', ');
 
@@ -870,7 +892,13 @@ classdef transientSpectra
             
             %update x and y units
             ylabel(obj(1).spectra.dispName);
-            xlabel(obj(1).delays.dispName);
+            
+            %if user specified 'index', true option
+            if p.Results.index
+                xlabel('index'); 
+            else %normal x-axis label display
+                xlabel(obj(1).delays.dispName);
+            end
         end
     end
     
@@ -891,8 +919,8 @@ classdef transientSpectra
             
             for objInd = 1:objNumel
                 %average over repeats in data
-                obj(objInd).spectra.data = mean(obj(objInd).spectra.data,3);
-                obj(objInd).spectra_std.data = sqrt(mean(obj(objInd).spectra_std.data.^2,3));
+                obj(objInd).spectra.data = mean(obj(objInd).spectra.data,3,'omitnan');
+                obj(objInd).spectra_std.data = sqrt(mean(obj(objInd).spectra_std.data.^2,3,'omitnan'));
                 obj(objInd).delays.data = mean(obj(objInd).delays.data,2);
                 %todo: add delay uncertainty?
 
@@ -1451,6 +1479,119 @@ classdef transientSpectra
 %             else
 %                 error('Expected all keyword or delay range [d1, d2] of type double.');
 %             end            
+        end
+        
+        function obj = prune(obj, varargin)
+% PRUNE sets selected bad data points to NaN. PRUNE can be run by
+% specifying a prune string, followed by a cell array of data points to
+% remove, or by specifying a logical array the same size as the object
+% spectra being pruned.
+%
+% obj = obj.PRUNE(pruneRule, pruneData);
+%
+% obj = obj.PRUNE(logicalArray
+            p = inputParser();
+            
+            p.addOptional('pruneRule','',@(s) ischar(s));
+            p.addRequired('pruneData',@(c) iscell(c) || islogical(c));
+            
+            p.parse(varargin{:});
+            
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            if ~iscell(p.Results.pruneData) || ~islogical(p.Results.pruneData{1})
+                dimOrder = {'pixels','delays','rpts','gpos','schemes'};
+                
+                pruneStr = strsplit(p.Results.pruneRule);
+                pruneData = p.Results.pruneData;
+                
+                logicalArray = cell(objSize);  %default value for logical array cell
+                
+                %determine pruneData nest depth
+                nestDepth = 1;
+                tmp = pruneData;
+                isIndCell = cellfun('isclass',tmp,'cell');
+                while any(isIndCell(:))
+                    cellInd = find(isIndCell);
+                    tmp = tmp{cellInd(1)};
+                    isIndCell = cellfun('isclass',tmp,'cell');
+                    nestDepth = nestDepth + 1;
+                end
+                
+                %ensure that the pruneStr has an entry for each nest level
+                assert(length(pruneStr)==nestDepth,['The nested levels in the cell tree must '...
+                    'match the number of entries in the prune string. Nested levels: '...
+                    num2str(nestDepth) ' Prune strings: ' num2str(length(pruneStr))]);
+                
+                if strcmp(pruneStr{1},'obj')
+                    pruneStr = pruneStr(2:end); %remove obj from pruneStr
+                    
+                    %determine if pruneData explicitly specifies object index
+                    isIndex = cellfun('isclass',pruneData,'double');  
+                    if any(isIndex)    %explicit object index -- convert to implicit
+                        
+                    end
+                    
+                    %pruneData shold be a cell array the same size as obj and logical Array
+                    
+                else
+                    %convert pruneData to specify object index as outermost cell
+                    pruneData = p.Results.pruneData;
+                end
+                
+                %convert pruneData to column for easy looping
+                pruneData = pruneData(:);
+                pruneNumel = numel(pruneData);
+                
+                %loop over prune object index
+                for pruneInd = 1:pruneNumel
+                    %initialize prune logical array. False means keep the
+                    %data point, true means prune it (set to NaN)
+                    logicalArray{pruneInd} = false(size(obj(pruneInd).spectra.data));
+                    
+                    %loop over nested levels
+                    for ii = 1:nestDepth
+                        
+                    end
+                end
+                
+                
+            else
+               logicalArray = p.Results.pruneData; 
+               if ~iscell(logicalArray)
+                   logicalArray = {logicalArray};
+               end
+            end
+            
+            %Prune object data
+            for objInd = 1:objNumel
+               %create local copy of spectra data for pruning
+               tmpSpectra = obj(objInd).spectra.data;
+               tmpSpectraStd = obj(objInd).spectra_std.data;
+               
+               %convert spectra data to column for easy indexing
+               spectraSize = size(tmpSpectra);
+               tmpSpectra = tmpSpectra(:);
+               tmpSpectraStd = tmpSpectraStd(:);
+               
+               %depending on number of entries in logicalArray cell, set
+               %specified indicies to NaN
+               if length(logicalArray)==1
+                   tmpSpectra(logicalArray{1}(:)) = NaN;
+                   tmpSpectraStd(logicalArray{1}(:)) = NaN;
+               else
+                   tmpSpectra(logicalArray{objInd}(:)) = NaN;
+                   tmpSpectraStd(logicalArray{objInd}(:)) = NaN;
+               end
+               
+               %reassign reshaped pruned spectra back to object data
+               obj(objInd).spectra.data = reshape(tmpSpectra,spectraSize);
+               obj(objInd).spectra_std.data = reshape(tmpSpectraStd,spectraSize);
+            end
+            
         end
     end
     
