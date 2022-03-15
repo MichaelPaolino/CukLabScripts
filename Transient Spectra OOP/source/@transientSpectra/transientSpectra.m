@@ -631,7 +631,7 @@ classdef transientSpectra
             end
             
             %Generate object name rule for line/legend display
-            [obj, unitStr] = obj.buildDisplayNames();
+            [obj, unitStr] = obj.buildDisplayNames('shortName',true);
             
             %check hold state to preserve default axes class display behavior
             holdState = ishold();
@@ -905,7 +905,7 @@ classdef transientSpectra
     %% Data manipulation methods that modify the spectra object
     methods
         
-        function obj = average(obj)
+        function obj = average(obj, varargin)
         % AVERAGE all repeats for each element in the object array
         %
         % obj = obj.AVERAGE()
@@ -917,15 +917,37 @@ classdef transientSpectra
             objNumel = numel(obj);
             obj = obj(:);
             
+            if isempty(varargin)
+                varargin{1} = 'rpts';
+            end
+            
             for objInd = 1:objNumel
-                %average over repeats in data
-                obj(objInd).spectra.data = mean(obj(objInd).spectra.data,3,'omitnan');
-                obj(objInd).spectra_std.data = sqrt(mean(obj(objInd).spectra_std.data.^2,3,'omitnan'));
-                obj(objInd).delays.data = mean(obj(objInd).delays.data,2);
-                %todo: add delay uncertainty?
+                for ii = 1:length(varargin)
+                    switch varargin{ii}
+                        case 'rpts'
+                            %average over repeats in data
+                            obj(objInd).spectra.data = mean(obj(objInd).spectra.data,3,'omitnan');
+                            obj(objInd).spectra_std.data = sqrt(mean(obj(objInd).spectra_std.data.^2,3,'omitnan'));
+                            obj(objInd).delays.data = mean(obj(objInd).delays.data,2);
+                            %todo: add delay uncertainty?
 
-                %update sizes
-                obj(objInd).sizes.nRpts = 1;
+                            %update sizes
+                            obj(objInd).sizes.nRpts = 1;
+                            
+                        case 'delays'
+                            %average over repeats in data
+                            obj(objInd).spectra.data = mean(obj(objInd).spectra.data,2,'omitnan');
+                            obj(objInd).spectra_std.data = sqrt(mean(obj(objInd).spectra_std.data.^2,2,'omitnan'));
+                            obj(objInd).delays.data = mean(obj(objInd).delays.data,1);
+                            %todo: add delay uncertainty?
+
+                            %update sizes
+                            obj(objInd).sizes.nDelays = 1;
+                        otherwise
+                            error([varargin{ii} ' is not a valid dimension to average over.']);
+                    end
+                       
+                end
             end
             
             %convert object array back to original size
