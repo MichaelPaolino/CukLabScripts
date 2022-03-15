@@ -33,26 +33,49 @@ function obj = convertDH(obj, dh_static, dh_array)
     wlc_tmp = zeros(obj.sizes.nPixels, nArray);
     spectra_tmp = zeros(obj.sizes.nPixels, nArray, obj.sizes.nSchemes);
     spectrastd_tmp = zeros(obj.sizes.nPixels, nArray, obj.sizes.nSchemes);
-
-    %Loop through data holder array and convert nested struct
-    %arrays to temporary simple arrays
-    for ii = 1:nArray
-        
-        if isAcquisition
-            rpts_tmp(ii) = dh_array(ii).Repeat;
-            gpos_tmp(ii) = dh_array(ii).Grating_Position;
-            delays_tmp(ii) = dh_array(ii).Delay;
-        else
-            rpts_tmp(ii) = ii;
-        end
-        
-        wlc_tmp(:,ii) = dh_array(ii).wlc;
-        
-        for jj = 1:obj.sizes.nSchemes
-            spectra_tmp(:,ii,jj) = dh_array(ii).proc_data(jj).data; %[pixel, array ind, data scheme]
-            spectrastd_tmp(:,ii,jj) = dh_array(ii).proc_data(jj).data; %[pixel, array ind, data scheme]
-        end
+    
+    %get indicies of field names for dh_array proc_data inside dh_array
+    dhFields = fieldnames(dh_array);
+    procDataFields = fieldnames(dh_array(1).proc_data);
+    
+    %convert nested double data inside struct to cell array and then to matrix
+    %this is 2 order of magnitude faster than doing it in a for loop...
+    cellDHArray = struct2cell(dh_array); 
+    cellProcData = cellfun(@(s) struct2cell(s),cellDHArray(strcmp(dhFields,'proc_data'),1,:),'UniformOutput',false); 
+    cellProcData = reshape(vertcat(cellProcData{:}),[],nArray,obj.sizes.nSchemes);
+    
+    %extract cell data into matrix
+    %wlc_tmp = permute(cell2mat(cellDHArray(strcmp(dhFields,'wlc'),1,:)),[2,3,1]); %[pixel, array ind]
+    spectra_tmp = reshape(cell2mat(cellProcData(strcmp(procDataFields,'data'),:,:)),[],nArray,obj.sizes.nSchemes); %[pixel, array ind, data scheme]
+    spectrastd_tmp = reshape(cell2mat(cellProcData(strcmp(procDataFields,'std'),:,:)),[],nArray,obj.sizes.nSchemes); %[pixel, array ind, data scheme]
+    
+    if isAcquisition
+        rpts_tmp = permute(cell2mat(cellDHArray(strcmp(dhFields,'Repeat'),1,:)),[2,3,1]); %[1, array ind]
+        gpos_tmp = permute(cell2mat(cellDHArray(strcmp(dhFields,'Grating_Position'),1,:)),[2,3,1]); %[1, array ind]
+        delays_tmp = permute(cell2mat(cellDHArray(strcmp(dhFields,'Delay'),1,:)),[2,3,1]); %[1, array ind]
+    else
+        rpts_tmp = 1:nArray;
     end
+    
+%     %Loop through data holder array and convert nested struct
+%     %arrays to temporary simple arrays
+%     for ii = 1:nArray
+%         
+%         if isAcquisition
+%             rpts_tmp(ii) = dh_array(ii).Repeat;
+%             gpos_tmp(ii) = dh_array(ii).Grating_Position;
+%             delays_tmp(ii) = dh_array(ii).Delay;
+%         else
+%             rpts_tmp(ii) = ii;
+%         end
+%         
+%         wlc_tmp(:,ii) = dh_array(ii).wlc;
+%         
+%         for jj = 1:obj.sizes.nSchemes
+%             spectra_tmp(:,ii,jj) = dh_array(ii).proc_data(jj).data; %[pixel, array ind, data scheme]
+%             spectrastd_tmp(:,ii,jj) = dh_array(ii).proc_data(jj).data; %[pixel, array ind, data scheme]
+%         end
+%     end
     
     %Set units for delays and wavelengths
     obj.delays = obj.delays.changeBaseName('ps','Delay (ps)');
