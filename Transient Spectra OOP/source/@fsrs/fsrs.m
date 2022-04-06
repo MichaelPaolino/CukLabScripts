@@ -1,6 +1,6 @@
 classdef fsrs < transientSpectra
     properties
-        ramanPumpNm = 400;  %raman pump wavelength in nm
+        ramanPumpNm = 400;  %(double) raman pump wavelength in nm
         %implement conversions methods
     end
 
@@ -9,8 +9,26 @@ classdef fsrs < transientSpectra
     %%CONSTRUCTOR/LOAD METHODS%%
 
         function obj = fsrs(varargin)
-        % FSRS constructs a transientSpectra object with additional FSRS-specific
-        % functionality. 
+        % A FSRS object contains FSRS-specific funtionality in addition to
+        % everything inside the transientSpectra class. The main additional feature
+        % is defining a raman pump wavelength and the raman pump unit.
+        % 
+        % obj = fsrs(...);
+        %   Constructs a fsrs object with the same arguments as the transientSpectra
+        %   constructor call.
+        %
+        % obj = fsrs(..., 'ramanPumpNm', nmVal);
+        %   Constructs a fsrs object and additionally assigns the ramanPumpNm
+        %   value. The default value is 400 nm.
+        %
+        % FSRS specific units are:
+        %   Spectra: (%Gain) Raman gain in % or (ppmGain) in ppm
+        %   Delays: none
+        %   Wavelengths: (rcm-1) Raman shift away from the fundamental in cm-1
+        %
+        % The default units for a FSRS object are mOD, ps, and rcm-1
+        %
+        % See also: TRANSIENTSPECTRA, DOUBLEWITHUNITS
             
         %%--SPLIT FSRS SPECIFIC AND TRANSIENT SPECTRA SPECIFIC ARGS--%%
             %fsrs specific arguments
@@ -109,6 +127,10 @@ classdef fsrs < transientSpectra
         %Set the raman pump nm. This updates the raman shift unit
         %definition, which is why it requires an explicit set method.
         function obj = set.ramanPumpNm(obj,newNm)
+        % Update ramanPumpNm to a new value. 
+        % 
+        % obj(ind).ramanPumpNm = newVal;
+        %   Updates ramanPumpNm and recalculates the rcm-1 unit
             
             obj.ramanPumpNm = newNm;
             
@@ -126,8 +148,17 @@ classdef fsrs < transientSpectra
         %override superclass convertDH method to convert multi-scheme data
         %into specific scheme objects. Call this to load multiple objects
         function obj = convertDH(obj, dh_static, dh_array)
-        % CONVERTDH for fsrs class calls transientSpectra convertDH and assigns
-        % fsrs specific units to the spectra, wavelengths, and delays.
+        % CONVERTDH for FSRS class calls parent class TRANSIENTSPECTRA CONVERTDH 
+        % and assigns FSRS specific units to the spectra, wavelengths, and delays.
+        %
+        % FSRS specific units are:
+        %   Spectra: (%Gain) Raman gain in % or (ppmGain) in ppm
+        %   Delays: none
+        %   Wavelengths: (rcm-1) Raman shift away from the fundamental in cm-1
+        %
+        % The default units for a FSRS object are mOD, ps, and rcm-1
+        %
+        % See also: DOUBLEWITHUNITS
             
             %call parent method first for generic conversion of dh_array to transientSpectra
             obj = convertDH@transientSpectra(obj, dh_static, dh_array);
@@ -154,11 +185,12 @@ classdef fsrs < transientSpectra
                 @(f) 1e7*(1/obj.ramanPumpNm-1./f),...
                 @(f) 1./(1/obj.ramanPumpNm-1e-7*f));
             
-            %update object data to include new units
-            obj.spectra = doubleWithUnits(obj.spectra.data,spectraRules);
-            obj.spectra_std = doubleWithUnits(obj.spectra_std.data,spectraRules);
-            obj.delays = doubleWithUnits(obj.delays.data,delayRules);
-            obj.wavelengths = doubleWithUnits(obj.wavelengths.data,wlRules);
+            %update object data to include new units. In addition, force
+            %data to be real-valued
+            obj.spectra = doubleWithUnits(real(obj.spectra.data),spectraRules);
+            obj.spectra_std = doubleWithUnits(real(obj.spectra_std.data),spectraRules);
+            obj.delays = doubleWithUnits(real(obj.delays.data),delayRules);
+            obj.wavelengths = doubleWithUnits(real(obj.wavelengths.data),wlRules);
             
             %set default units
             obj = obj.setUnits('rcm-1','ps','mOD');
@@ -169,7 +201,10 @@ classdef fsrs < transientSpectra
     methods
         
         function [obj, pumpNm] = findRamanPumpNm(obj, varargin)
-        % FINDRAMANPUMPNM automatically finds the raman pump wavelength in nm.
+        % FINDRAMANPUMPNM automatically finds the raman pump wavelength in nm. This
+        % is useful for a rough calibration fo the raman shift for quick data
+        % preview. An internal standard is required for more accurate calibration.
+        %
         % The algorithm works by searching a wavelength region defined by guess +/- 
         % threshold and searching for the maximum point. Because the fundamental
         % peak is an image of the pump scatter on the spectrometer slit, it does 
@@ -179,8 +214,15 @@ classdef fsrs < transientSpectra
         % pump wavelength is the average over all valid grating positions.
         %
         % By default, the guess wavelength is obj.ramanPumpNm and the threshold is
-        % 10 nm. These defaults can be overriden. Note: the search is performed in
-        % nm units, but the output object will have the same units as the input.
+        % 10 nm. These defaults can be overriden. While these values and the search
+        % is performed in nm units, but the output object will have the same units 
+        % as the input.
+        %
+        % Note: This automatic callibration is not very accurate. For accurate
+        % calibration you should manually shift/scale the wavelength axis against a
+        % known standard, such as a sulfate peak. In addition, the fundamental's
+        % "Rowland Ghost" sidebands can be used for a more accurate 0 cm-1
+        % calibration.
         %
         % obj = obj.FINDRAMANPUMPNM()
         %   Search and update the raman pump center wavelength (nm) using the

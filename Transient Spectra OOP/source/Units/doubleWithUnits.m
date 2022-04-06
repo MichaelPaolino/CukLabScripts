@@ -31,7 +31,7 @@ classdef doubleWithUnits < double
         % The units are kept track of by using unitRules. unitRules is a struct
         % that defines a unit short name the user can reference for conversion, a
         % display name, and an anonymous function handle that defines how the
-        % doulbe data should be converted to the current unit from the base unit
+        % double data should be converted to the current unit from the base unit
         % and the function's inverse (current unit to base unit).
         %
         % obj = DOUBLEWITHUNITS()
