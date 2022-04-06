@@ -166,21 +166,14 @@ classdef fsrs < transientSpectra
             %add unit rules to spectra, delays, etc. todo: add to method or as a subclass of doubleWithUnits class
             %spectra
             spectraRules = doubleWithUnits([],obj.spectra);
-            spectraRules = spectraRules.addRule('mOD','\DeltaAbs. (mOD)',@(f) 1e3*f, @(f) 1e-3*f);
             spectraRules = spectraRules.addRule('%Gain','Raman Gain (%)',@(f) 1e2*(10.^f-1), @(f) log10(1+1e-2*f));
             spectraRules = spectraRules.addRule('ppmGain','Raman Gain (ppm)',@(f) 1e6*(10.^f-1), @(f) log10(1+1e-6*f));
             
-            %delays
+            %delays (currently does nothing)
             delayRules = doubleWithUnits([],obj.delays);
-            delayRules = delayRules.addRule('fs','Delay (fs)',@(f) 1e3*f, @(f) 1e-3*f);
-            delayRules = delayRules.addRule('ns','Delay (ns)',@(f) 1e-3*f, @(f) 1e3*f);
-            delayRules = delayRules.addRule('us','Delay (\ms)',@(f) 1e-6*f, @(f) 1e6*f);
             
             %wavelengths
             wlRules = doubleWithUnits([],obj.wavelengths);            
-            wlRules = wlRules.addRule('um','Wavelength (\mm)',@(f) 1e3*f, @(f) 1e-3*f);
-            wlRules = wlRules.addRule('eV','Energy (eV)',@(f) 1239.8./f, @(f) 1239.8./f);
-            wlRules = wlRules.addRule('ecm-1','Wavenumber (cm^{-1})',@(f) 1e7./f, @(f) 1e7./f);
             wlRules = wlRules.addRule('rcm-1','Raman Shift (cm^{-1})',...
                 @(f) 1e7*(1/obj.ramanPumpNm-1./f),...
                 @(f) 1./(1/obj.ramanPumpNm-1e-7*f));

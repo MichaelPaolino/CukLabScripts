@@ -77,9 +77,28 @@ function obj = convertDH(obj, dh_static, dh_array)
 %         end
 %     end
     
-    %Set units for delays and wavelengths
-    obj.delays = obj.delays.changeBaseName('ps','Delay (ps)');
-    obj.wavelengths = obj.wavelengths.changeBaseName('nm','Wavelength (nm)');
+    %define unit rules for spectra, delays, and wavelengths.
+    %spectra
+    spectraRules = doubleWithUnits([],'OD','\DeltaAbs. (OD)');
+    spectraRules = spectraRules.addRule('mOD','\DeltaAbs. (mOD)',@(f) 1e3*f, @(f) 1e-3*f);
+    
+    %delays
+    delayRules = doubleWithUnits([],'ps','Delay (ps)');
+    delayRules = delayRules.addRule('fs','Delay (fs)',@(f) 1e3*f, @(f) 1e-3*f);
+    delayRules = delayRules.addRule('ns','Delay (ns)',@(f) 1e-3*f, @(f) 1e3*f);
+    delayRules = delayRules.addRule('us','Delay (\ms)',@(f) 1e-6*f, @(f) 1e6*f);
+    
+    %wavelengths
+    wlRules = doubleWithUnits([],'nm','Wavelength (nm)');            
+    wlRules = wlRules.addRule('um','Wavelength (\mm)',@(f) 1e3*f, @(f) 1e-3*f);
+    wlRules = wlRules.addRule('eV','Energy (eV)',@(f) 1239.8./f, @(f) 1239.8./f);
+    wlRules = wlRules.addRule('ecm-1','Wavenumber (cm^{-1})',@(f) 1e7./f, @(f) 1e7./f);
+    
+    % Assign unit rules to object data, starting with an empty doubleWithUnits
+    obj.spectra = doubleWithUnits([],spectraRules);
+    obj.spectra_std = doubleWithUnits([],spectraRules);
+    obj.delays = doubleWithUnits([],delayRules);
+    obj.wavelengths = doubleWithUnits([],wlRules);
     
     %Format repeat and grating position temporary arrays into final formats
     obj.sizes.nRpts = max(rpts_tmp);
@@ -112,10 +131,6 @@ function obj = convertDH(obj, dh_static, dh_array)
     obj.schemes = {dh_array(1).proc_data.dataScheme};
     obj.schemes = obj.schemes(:);
     
-    %set units for spectra
-    obj.spectra = obj.spectra.changeBaseName('OD','\DeltaAbs. (OD)');
-    obj.spectra_std = obj.spectra_std.changeBaseName('OD','\DeltaAbs. (OD)');
-    
     %finally format raw data into final format
     obj.spectra.data = nan(obj.sizes.nPixels,obj.sizes.nDelays*obj.sizes.nRpts*obj.sizes.nGPos,obj.sizes.nSchemes);
     obj.spectra.data(:,1:size(spectra_tmp,2),:) = spectra_tmp;
@@ -127,5 +142,7 @@ function obj = convertDH(obj, dh_static, dh_array)
 
     %Set a default short name, long name, and description
     obj.description = dh_static.Description;
-
+    
+    %Set default units
+    obj = obj.setUnits('nm','ps','mOD');
 end
