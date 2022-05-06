@@ -58,6 +58,12 @@ function outputStruct = export(obj,filePath,varargin)
     objNumel = numel(obj);
     obj = obj(:);
     
+    %Format filepath to contain an extention (prevents append bug)
+    [~,~,ext] = fileparts(filePath);
+    if isempty(ext)
+        filePath = [filePath '.mat'];
+    end
+    
     %todo: figure out if scheme naming is needed or not
     
     for objInd = 1:objNumel
