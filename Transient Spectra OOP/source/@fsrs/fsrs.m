@@ -330,5 +330,43 @@ classdef fsrs < transientSpectra
             obj = reshape(obj,objSize);
         end
         
+        function [obj, shiftRcm] = calibrateRamanPump(obj, pixelInd, pixelRcm)
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            pixelInd = pixelInd(:);
+            pixelRcm = pixelRcm(:);
+            
+            %optional input to calibrate all objects in the same way
+            if isscalar(pixelInd) && isscalar(pixelRcm)
+                pixelInd = pixelInd*ones(1,objNumel);
+                pixelRcm = pixelRcm*ones(1,objNumel);
+            end
+            
+            shiftRcm = zeros(1,objNumel);
+            obj = obj(:);
+            
+            for objInd = 1:objNumel
+                %remember old units and set new units to rcm-1
+                tmpUnits = cell(3,1);
+                [tmpUnits{:}] = obj(objInd).getUnits();
+                obj(objInd) = obj(objInd).setUnits('rcm-1','','');
+                
+                %calculate the raman shift and set as double with units object
+                shiftRcm(objInd) = mean(obj(objInd).wavelengths.data(pixelInd(objInd),:,:),'all')-pixelRcm(objInd);
+                shiftNm = doubleWithUnits(shiftRcm(objInd),obj(objInd).wavelengths);
+                shiftNm.unit = 'nm';
+                
+                obj(objInd).ramanPumpNm = shiftNm.data;
+                
+                %set units back to input units
+                obj(objInd) = obj(objInd).setUnits(tmpUnits{:});
+            end
+            
+            %convert object array back to original size
+            obj = reshape(obj,objSize);
+            shiftRcm = reshape(shiftRcm,objSize);
+        end
+        
     end
 end

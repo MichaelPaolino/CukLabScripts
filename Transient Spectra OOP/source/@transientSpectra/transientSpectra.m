@@ -560,7 +560,7 @@ classdef transientSpectra
             fileName = fileName{end};
             switch class(loaded.(contents{1}))   %check the variable class
                 case 'struct'    %this should be a data_holder object
-                    if strcmp(contents{1},'dh_static') %this is a raw data data_holder
+                    if any(strcmp(contents,'dh_static')) && any(strcmp(contents,'dh_array')) %this is a raw data data_holder
                         %first load with acquisition data holder
                         [varargout{1:nargout}] = convertDH(obj,loaded.dh_static,loaded.dh_array);
                         
@@ -1129,6 +1129,12 @@ classdef transientSpectra
 
                             %update sizes
                             obj(objInd).sizes.nDelays = 1;
+                        
+                        case 'wavelengths'
+                            obj(objInd).spectra.data = mean(obj(objInd).spectra.data,1,'omitnan');
+                            obj(objInd).spectra_std.data = sqrt(mean(obj(objInd).spectra_std.data.^2,1,'omitnan'));
+                            obj(objInd).wavelengths.data = mean(obj(objInd).wavelengths.data,1,'omitnan');
+                            
                         otherwise
                             error([varargin{ii} ' is not a valid dimension to average over.']);
                     end
@@ -1804,6 +1810,9 @@ classdef transientSpectra
                obj(objInd).spectra.data = reshape(tmpSpectra,spectraSize);
                obj(objInd).spectra_std.data = reshape(tmpSpectraStd,spectraSize);
             end
+            
+            %convert object array back to original size
+            obj = reshape(obj,objSize);
             
         end
     end
