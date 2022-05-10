@@ -1094,7 +1094,12 @@ classdef transientSpectra
         %	Averages all delays for obj.spectra, obj.spectra_std, obj.delays and
         %	updates obj.sizes
         %
-        % obj = obj.AVERAGE('rts','delays')
+        % obj = obj.AVERAGE('wavelengths')
+        %	Averages all wavelengths for obj.spectra, obj.spectra_std, obj.delays 
+        %   and	updates obj.sizes. When multiple grating positions are present,
+        %	the grating positions are averaged individually.
+        %
+        % obj = obj.AVERAGE('rpts','delays')
         %	Averages all repeats and delays for obj.spectra, obj.spectra_std, 
         %	obj.delays and updates obj.sizes 
             
@@ -1114,7 +1119,7 @@ classdef transientSpectra
                             %average over repeats in data
                             obj(objInd).spectra.data = mean(obj(objInd).spectra.data,3,'omitnan');
                             obj(objInd).spectra_std.data = sqrt(mean(obj(objInd).spectra_std.data.^2,3,'omitnan'));
-                            obj(objInd).delays.data = mean(obj(objInd).delays.data,2);
+                            obj(objInd).delays.data = mean(obj(objInd).delays.data,2,'omitnan');
                             %todo: add delay uncertainty?
 
                             %update sizes
@@ -1124,7 +1129,7 @@ classdef transientSpectra
                             %average over repeats in data
                             obj(objInd).spectra.data = mean(obj(objInd).spectra.data,2,'omitnan');
                             obj(objInd).spectra_std.data = sqrt(mean(obj(objInd).spectra_std.data.^2,2,'omitnan'));
-                            obj(objInd).delays.data = mean(obj(objInd).delays.data,1);
+                            obj(objInd).delays.data = mean(obj(objInd).delays.data,1,'omitnan');
                             %todo: add delay uncertainty?
 
                             %update sizes
@@ -1701,13 +1706,20 @@ classdef transientSpectra
         
         function obj = prune(obj, varargin)
         % PRUNE sets selected bad data points to NaN. Currently, PRUNE can be run 
-        % only by specifying a logical array the same size as the object
-        % spectra being pruned. 
+        % only by specifying a logical array the same size as the object spectra
+        % or by specifying a cell array of logical being pruned arrays, where the 
+        % cell array is the same size as the object array and each element's 
+        % logical array is the same size as obj(elem).spectra.
         %
         % obj = obj.PRUNE(logicalArray)
         %   Sets indicies specified by logicalArray in obj.spectra to NaN.
         %   logicalArray must be the same size as obj.spectra
         %
+        % obj = obj.PRUNE(logicalArrayCell)
+        %   Prunes each element of object according to the elements of logicalArrayCell.
+        %   size(obj) must be the same as size(logicalArrayCell). This call is the same 
+        %   looping over elements of obj and logicalArrayCell and making the call above:
+        %   obj(elem) = obj(elem).PRUNE(logicalArrayCell(elem))
 
             p = inputParser();
             
@@ -1721,69 +1733,69 @@ classdef transientSpectra
             objNumel = numel(obj);
             obj = obj(:);
             
-            if ~iscell(p.Results.pruneData) || ~islogical(p.Results.pruneData{1})
-                dimOrder = {'pixels','delays','rpts','gpos','schemes'};
-                
-                pruneStr = strsplit(p.Results.pruneRule);
-                pruneData = p.Results.pruneData;
-                
-                logicalArray = cell(objSize);  %default value for logical array cell
-                
-                %determine pruneData nest depth
-                nestDepth = 1;
-                tmp = pruneData;
-                isIndCell = cellfun('isclass',tmp,'cell');
-                while any(isIndCell(:))
-                    cellInd = find(isIndCell);
-                    tmp = tmp{cellInd(1)};
-                    isIndCell = cellfun('isclass',tmp,'cell');
-                    nestDepth = nestDepth + 1;
-                end
-                
-                %ensure that the pruneStr has an entry for each nest level
-                assert(length(pruneStr)==nestDepth,['The nested levels in the cell tree must '...
-                    'match the number of entries in the prune string. Nested levels: '...
-                    num2str(nestDepth) ' Prune strings: ' num2str(length(pruneStr))]);
-                
-                if strcmp(pruneStr{1},'obj')
-                    pruneStr = pruneStr(2:end); %remove obj from pruneStr
-                    
-                    %determine if pruneData explicitly specifies object index
-                    isIndex = cellfun('isclass',pruneData,'double');  
-                    if any(isIndex)    %explicit object index -- convert to implicit
-                        
-                    end
-                    
-                    %pruneData shold be a cell array the same size as obj and logical Array
-                    
-                else
-                    %convert pruneData to specify object index as outermost cell
-                    pruneData = p.Results.pruneData;
-                end
-                
-                %convert pruneData to column for easy looping
-                pruneData = pruneData(:);
-                pruneNumel = numel(pruneData);
-                
-                %loop over prune object index
-                for pruneInd = 1:pruneNumel
-                    %initialize prune logical array. False means keep the
-                    %data point, true means prune it (set to NaN)
-                    logicalArray{pruneInd} = false(size(obj(pruneInd).spectra.data));
-                    
-                    %loop over nested levels
-                    for ii = 1:nestDepth
-                        
-                    end
-                end
-                
-                
-            else
+%             if ~iscell(p.Results.pruneData) || ~islogical(p.Results.pruneData{1})
+%                 dimOrder = {'pixels','delays','rpts','gpos','schemes'};
+%                 
+%                 pruneStr = strsplit(p.Results.pruneRule);
+%                 pruneData = p.Results.pruneData;
+%                 
+%                 logicalArray = cell(objSize);  %default value for logical array cell
+%                 
+%                 %determine pruneData nest depth
+%                 nestDepth = 1;
+%                 tmp = pruneData;
+%                 isIndCell = cellfun('isclass',tmp,'cell');
+%                 while any(isIndCell(:))
+%                     cellInd = find(isIndCell);
+%                     tmp = tmp{cellInd(1)};
+%                     isIndCell = cellfun('isclass',tmp,'cell');
+%                     nestDepth = nestDepth + 1;
+%                 end
+%                 
+%                 %ensure that the pruneStr has an entry for each nest level
+%                 assert(length(pruneStr)==nestDepth,['The nested levels in the cell tree must '...
+%                     'match the number of entries in the prune string. Nested levels: '...
+%                     num2str(nestDepth) ' Prune strings: ' num2str(length(pruneStr))]);
+%                 
+%                 if strcmp(pruneStr{1},'obj')
+%                     pruneStr = pruneStr(2:end); %remove obj from pruneStr
+%                     
+%                     %determine if pruneData explicitly specifies object index
+%                     isIndex = cellfun('isclass',pruneData,'double');  
+%                     if any(isIndex)    %explicit object index -- convert to implicit
+%                         
+%                     end
+%                     
+%                     %pruneData shold be a cell array the same size as obj and logical Array
+%                     
+%                 else
+%                     %convert pruneData to specify object index as outermost cell
+%                     pruneData = p.Results.pruneData;
+%                 end
+%                 
+%                 %convert pruneData to column for easy looping
+%                 pruneData = pruneData(:);
+%                 pruneNumel = numel(pruneData);
+%                 
+%                 %loop over prune object index
+%                 for pruneInd = 1:pruneNumel
+%                     %initialize prune logical array. False means keep the
+%                     %data point, true means prune it (set to NaN)
+%                     logicalArray{pruneInd} = false(size(obj(pruneInd).spectra.data));
+%                     
+%                     %loop over nested levels
+%                     for ii = 1:nestDepth
+%                         
+%                     end
+%                 end
+%                 
+%                 
+%             else
                logicalArray = p.Results.pruneData; 
                if ~iscell(logicalArray)
                    logicalArray = {logicalArray};
                end
-            end
+%             end
             
             %Prune object data
             for objInd = 1:objNumel
