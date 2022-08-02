@@ -4,6 +4,7 @@ classdef transientSpectra
         spectra_std = doubleWithUnits(); %(doubleWithUnits) std array for one shot cycle (e.g. 2 frames) with dims [pixels, delays, rpts, grating pos, schemes]
         wavelengths = doubleWithUnits();  %(doubleWithUnits) array with dims [pixels, grating pos]
         delays = doubleWithUnits();   %(doubleWithUnits) array with dims [delays, repeats, grating pos]
+        t0 = doubleWithUnits(0, delays); %(doubleWithUnits) scalar
         gPos = zeros(); %(double) array of grating positions with dims [nGPos,1]
         
         name = '';  %(char) filename used to generate the object
@@ -1826,6 +1827,74 @@ classdef transientSpectra
             %convert object array back to original size
             obj = reshape(obj,objSize);
             
+        end
+        
+        function [obj, t0Arr] = findT0(obj, varargin)
+% FINDT0 attempts to find the true t0 inside the dataset by fitting a
+% specified wavelength to an appropriate function, such as a sigmoid. The 
+% user also has an option to specifiy a custom fit function.
+%
+% obj = obj.FINDT0()
+%   Finds the t0 for the dataset by fitting the central wavelength to a 
+%   sigmoid function, dOD = a+b*0.5*(1+erf(sqrt(0.5)*(t-t0)/s)), where a is
+%   a baseline, b is the signal amplitude, and s is the standard deviation
+%   rise-time (defined by the pump-probe convolution).
+            
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            t0Arr = cell(objNumel,1);
+            
+            % Format varargin and set default values
+            wlAr = [];
+            tRange = [];
+            
+            % Loop over individual object elements
+            for objInd = 1:objNumel
+               % Subset and trim the object to the desired wavelength and delay range
+               tmpObj = obj(objInd).subset('wavelengths',wlAr);
+               tmpObj = tmpObj.trim('delays',tRange);
+               
+               %convert object into double array
+               t = tmpObj.delays.data;
+               spectData = tmpObj.spectra.data;
+               
+               %convert spectra dims
+               %from [pixels, delays, rpts, grating pos, schemes]
+               %into [delays, pixels x rpts x grating pos x schemes]
+               nExtraDim = tmpObj.nPixels*tmpObj.nRpts*tmpObj.nGPos*tmpObj.nSchemes;
+               spectData = permute(spectData,[2,1,3,4,5]);
+               spectData = reshape(spectData,tmpObj.nDelays,nExtraDim);
+               
+               %loop over extra dims and fit 
+               t0Tmp = zeros(1,nExtraDim);
+                              
+               for ii = 1:nExtraDim
+                   %run lsqFitSigmoid, which fits data to y = a+b*0.5*(1+erf(sqrt(0.5)*(x-x0)/s));
+                   %and returns fp as [a, b, x0, s]
+                   fp = lsqFitSigmoid(t, spectData(:,ii));
+                   t0Tmp(1,ii) = fp(3);
+               end
+               
+               %convert t0 dims
+               %from [1,pixels x rpts x grating pos x schemes]
+               %to [pixels, rpts, grating pos, schemes]
+               %and store in t0 output and object member data
+               
+               t0Arr{objInd} = reshape(t0Tmp,tmpObj.nPixels,tmpObj.nRpts,tmpObj.nGPos,tmpObj.nSchemes);
+               obj(objInd).t0 = doubleWithUnits(t0Arr{objInd},obj(objInd).t0);
+            end
+            
+            % convert object array back to original size
+            obj = reshape(obj,objSize);
+            t0Arr = reshape(t0Arr,objSize);
+            
+            % if there is only one object, return a double array instead of
+            % a cell array
+            if objNumel == 1
+               t0Arr = t0Arr{1}; 
+            end
         end
     end
     
