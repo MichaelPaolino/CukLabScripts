@@ -27,9 +27,9 @@ function varargout = lsqFitSigmoid(x, y)
     x = x(:);
 
     % remove any NaN values 
-    TF = isnan(y);
-    y = y(~TF);
-    x = x(~TF);
+    TF = ~isnan(y) & ~isnan(x);
+    y = y(TF);
+    x = x(TF);
 
     % determine a good initial guess for b and its bounds by determining
     % the sign of the sigmoid
@@ -38,13 +38,13 @@ function varargout = lsqFitSigmoid(x, y)
 
     if maxVal > abs(minVal)
         bG = maxVal;
+        x0 = x((y > mean([maxVal, minVal])),1);
+        x0 = x0(1);
     else
         bG = minVal;
+        x0 = x((y < mean([maxVal, minVal])),1);
+        x0 = x0(1);
     end
-    
-    %find the point where the data first crosses the half-rise
-    x0 = x((y > mean([maxVal, minVal])),1);
-    x0 = x0(1);
 
     % Setup guess for least squares search
     %          a  b    x0  s

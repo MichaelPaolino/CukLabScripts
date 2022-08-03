@@ -5,6 +5,10 @@ classdef wlTR < transientSpectra
        chirpCorrected = false;
    end
    
+   properties (Access = protected)
+       TRflag = struct('chirpFit',false);     
+   end
+   
    methods
        
        function obj = correctChirp(obj, chirpPoly)
@@ -22,32 +26,70 @@ classdef wlTR < transientSpectra
            obj = reshape(obj,objSize);
        end
        
-       function [obj,chirpFit] = fitChirp(obj,wlRange,tRange,polyOrder)
+       function [obj,chirpFit] = fitChirp(obj,varargin)
+           
+% FITCHIRP attempts to extract the white light continuum group delay as a 
+% function of wavelength. The group delay is approximated with a polynomial
+% function (default: 5th order). The ideal data set is a high fluence OC 
+% spectra with finely spaced delay points (~100 fs) with a range of 
+% +/- 2 ps around t0.
+%
+% This method works by fitting a specified delay range (Default, -2 to 2 ps)
+% to an erf sigmoid for every wavelength in the dataset. The sigmoid's 
+% center vs. wavelength is then fit to a polynomial of specified order 
+% (default: 5th order).
+%
+% obj = obj.CHIRPFIT()
+%   Extracts the WLC group delay vs. wavelength and fits the data to a 5th
+%   order polynomial.
+%
+% obj = obj.CHIRPFIT(varargin)
+%   Extracts the WLC group delay vs. wavelengths and fits to a polynomail
+%   with the additional name-value pair options:
+%
+% Name-value pairs:
+%   'wavelengths': (double array) an array of wavelengths to subset the
+%      spectra to help speed up fitChirp. Default is to use all
+%      wavelengths.
+%   'delays': (double array) [lower, upper] a 1x2 array of delays to trim
+%      that limits the sigmoid fit range. Default is -2 to 2 ps.
+%   'order': (int) an integer > 0 that specifies the polynomial order of
+%      the group delay vs. wavelength. The default order is 5.
+           
            %--PREFORMAT DATA--
            % Format object array dims into a column for easy looping
            objSize = size(obj);
            objNumel = numel(obj);
            obj = obj(:);
            
-           % Trim object size to desired sub-range
-           objTmp = obj.trim('wavelengths',wlRange,'delays',tRange);
+           % Format varargin using input parser
+           p = inputParser;
+           p.FunctionName = 'correctT0';
+           p.addParameter('wavelengths', []);
+           p.addParameter('delays', [-2,2]);
+           p.addParameter('order',5);
            
-           % Set units to common values so that initial guess below would be valid
+           % Parse arguemnts, results will be in p.Results
+           p.parse(varargin{:});
+           
+           % Trim and subset object size to desired sub-range
+           objTmp = obj.trim('delays',p.Results.delays);
+           
+           if ~isempty(p.Results.wavelengths)
+               objTmp = objTmp.subset('wavelengths',p.Results.wavelengths);
+           end
+           
+           % Set units to common values so that initial guess below can be
+           % referenced in other data sets
            objTmp = objTmp.setUnits('nm','ps','mOD');
            
-           % Average repeats and stitch grating position
+           % Average repeats and stitch grating position to make the
+           % procedure below easier to run
            objTmp = objTmp.average();
            objTmp = objTmp.stitch();
-                      
-           % Define sigmoid fit function that starts at a, rises to b, with
-           % std s centered at x0
-           mySigmoid = @(a,b,x0,s,x) a+b*0.5*(1+erf(sqrt(0.5)*(x-x0)/s));           
-           
-           % Define lsqnonlin options for tight convergance and quiet operation
-           opts = optimoptions(@lsqnonlin,'TolFun',1e-9,'TypicalX',[0.2 5 0.5 0.2]','Display','off');
            
            % Initialize chirpFit output
-           chirpFit = zeros(polyOrder+1, objNumel);
+           chirpFit = zeros(p.Results.order+1, objNumel);
            
            % Start waitbar
            f = waitbar(0,['Fitting group delay for spectra 1 of ' num2str(objNumel)]);
@@ -58,9 +100,9 @@ classdef wlTR < transientSpectra
                waitbar(0,f,['Fitting group delay for spectra ' num2str(objInd) ' of ' num2str(objNumel)]);
                
                % Extract spectra data from object and use locally
-               data = objTmp(objInd).spectra.data;
-               wl = objTmp(objInd).wavelengths.data;
-               t = objTmp(objInd).delays.data;
+               data = objTmp(objInd).spectra.data; %[wls,delays]
+               wl = objTmp(objInd).wavelengths.data; %[wls,1]
+               t = objTmp(objInd).delays.data;  %[delays,1]
                
                % Initialize sigmoid fit parameter matrix
                myFP = zeros(length(wl),4);
@@ -70,37 +112,13 @@ classdef wlTR < transientSpectra
                    % Update waitbar
                    waitbar(wlInd/length(wl),f);
                    
-                   TF = isnan(data(wlInd,:));
-                   dataTmp = data(wlInd,~TF);
-                   tTmp = t(~TF);
-                   
-                   % determine a good initial guess for b and its bounds
-                   minVal = min(dataTmp);
-                   maxVal = max(dataTmp);
-                   
-                   if maxVal > abs(minVal)
-                       bG = maxVal;
-                       bGL = 0;
-                       bGU = 1.5*maxVal;
-                   else
-                       bG = minVal;
-                       bGL = 1.5*minVal;
-                       bGU = 0;
-                   end
-                   
-                   % Setup guess for least squares search
-                   %          a  b    x0  s
-                   myGuess = [0  bG   0   0.2]; %initial guess
-                   myLB =    [-1 bGL  -2  0];   %lower bound
-                   myUB =    [1  bGU  2   1];   %upper bound
-                   
-                   %do the least squares fit
-                   myFP(wlInd,:) = lsqnonlin(@(fp) mySigmoid(fp(1),fp(2),fp(3),fp(4),tTmp(:))-dataTmp(:),myGuess,myLB,myUB,opts);
+                   % Do the least squares fit using the lsqsigmoid fit
+                   myFP(wlInd,:) =  lsqFitSigmoid(t, data(wlInd,:));
                end
                
                % Once the sigmoid fit is done, find the chirp parameters
                % and update object data
-               chirpFit(:,objInd) = polyfit(wl,myFP(:,3),polyOrder);
+               chirpFit(:,objInd) = polyfit(wl,myFP(:,3),p.Results.order);
                obj(objInd).chirpParams = chirpFit(:,objInd);
                
                % Plot resuls
@@ -121,7 +139,7 @@ classdef wlTR < transientSpectra
            
            %convert object array back to original size
            obj = reshape(obj,objSize);
-           chirpFit = reshape(chirpFit, [polyOrder+1,objSize]);
+           chirpFit = reshape(chirpFit, [p.Results.order+1,objSize]);
        end
    end
 end

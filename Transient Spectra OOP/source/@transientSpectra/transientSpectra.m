@@ -4,7 +4,7 @@ classdef transientSpectra
         spectra_std = doubleWithUnits(); %(doubleWithUnits) std array for one shot cycle (e.g. 2 frames) with dims [pixels, delays, rpts, grating pos, schemes]
         wavelengths = doubleWithUnits();  %(doubleWithUnits) array with dims [pixels, grating pos]
         delays = doubleWithUnits();   %(doubleWithUnits) array with dims [delays, repeats, grating pos]
-        t0 = doubleWithUnits(0, delays); %(doubleWithUnits) scalar
+        t0 = doubleWithUnits(); %(doubleWithUnits) array with dims [pixels searched, repeats, grating pos]
         gPos = zeros(); %(double) array of grating positions with dims [nGPos,1]
         
         name = '';  %(char) filename used to generate the object
@@ -37,7 +37,9 @@ classdef transientSpectra
     end
     
     properties (Access = protected)
-       isDefault = true;    %(logical) is this a default object (i.e. no data loaded)?
+       flags = struct('isDefault', true,...%(logical) is this a default object (i.e. no data loaded)?
+                      't0corr', false);    %(logical) has the t0 been corrected?
+                      
        displayNames = nameRule(); %(nameRule) object containing generic naming rules for legend and export display
     end
     
@@ -147,7 +149,7 @@ classdef transientSpectra
                end
                
                %If data has been loaded succesfully, set each element default object flag to false
-               [obj(:).isDefault] = deal(false);
+               [obj(:).flags.isDefault] = deal(false);
                
            %%--PARSE KEYWORDS AND NAME_VALUE PAIRS--%%
                while argInd <= nargin
@@ -209,6 +211,7 @@ classdef transientSpectra
 
                if ~isempty(delayUnit)
                    obj(objInd).delays.unit = delayUnit;
+                   obj(objInd).t0.unit = delayUnit;
                end
 
                if ~isempty(spectraUnit)
@@ -1085,7 +1088,15 @@ classdef transientSpectra
     methods
         
         function obj = average(obj, varargin)
-        % AVERAGE all repeats and/or delays for each element in the object array
+        % AVERAGE all repeats, wavelengths, and/or delays for each element in 
+        % the object array. 
+        %
+        % Note that this method treats various dims in the spectra array as having 
+        % the same nominal delay and wavelength values (unless it is a different 
+        % grating position). Therefore, the output delay and wavelength will be 
+        % averaged accordingly. Call obj.interp before calling obj.average if you 
+        % wish to correct for small differences in delay or wavelength accross 
+        % repeats.
         %
         % obj = obj.AVERAGE()
         %	Averages all repeats for obj.spectra, obj.spectra_std, obj.delays and
@@ -1103,6 +1114,8 @@ classdef transientSpectra
         % obj = obj.AVERAGE('rpts','delays')
         %	Averages all repeats and delays for obj.spectra, obj.spectra_std, 
         %	obj.delays and updates obj.sizes 
+        %
+        % See Also: MEAN, INTERP
             
             % Format object array dims into a column for easy looping
             objSize = size(obj);
@@ -1830,15 +1843,19 @@ classdef transientSpectra
         end
         
         function [obj, t0Arr] = findT0(obj, varargin)
-% FINDT0 attempts to find the true t0 inside the dataset by fitting a
-% specified wavelength to an appropriate function, such as a sigmoid. The 
-% user also has an option to specifiy a custom fit function.
-%
-% obj = obj.FINDT0()
-%   Finds the t0 for the dataset by fitting the central wavelength to a 
-%   sigmoid function, dOD = a+b*0.5*(1+erf(sqrt(0.5)*(t-t0)/s)), where a is
-%   a baseline, b is the signal amplitude, and s is the standard deviation
-%   rise-time (defined by the pump-probe convolution).
+        % FINDT0 attempts to find the true t0 inside the dataset by fitting a
+        % specified wavelength to an appropriate function, such as a sigmoid. The 
+        % user also has an option to specifiy a custom fit function.
+        %
+        % todo: add logic that keeps track of whether t0 has been corrected or not
+        %
+        % obj = obj.FINDT0()
+        %   Finds the t0 for the dataset by fitting the central wavelength to a 
+        %   sigmoid function, dOD = a+b*0.5*(1+erf(sqrt(0.5)*(t-t0)/s)), where a is
+        %   a baseline, b is the signal amplitude, and s is the standard deviation
+        %   rise-time (defined by the pump-probe convolution).
+        %
+        % See Also: LSQFITSIGMOID, LSQNONLIN
             
             % Format object array dims into a column for easy looping
             objSize = size(obj);
@@ -1847,11 +1864,19 @@ classdef transientSpectra
             t0Arr = cell(objNumel,1);
             
             % Format varargin and set default values
+            tRange = [-2 2];
             wlAr = [];
-            tRange = [];
+            defaultWlAr = true;
             
             % Loop over individual object elements
             for objInd = 1:objNumel
+                
+               if defaultWlAr
+                   minWl = min(obj(objInd).wavelengths.data,[],'all');
+                   maxWl = max(obj(objInd).wavelengths.data,[],'all');
+                   wlAr = 0.5*(minWl + maxWl);
+               end
+                   
                % Subset and trim the object to the desired wavelength and delay range
                tmpObj = obj(objInd).subset('wavelengths',wlAr);
                tmpObj = tmpObj.trim('delays',tRange);
@@ -1863,17 +1888,23 @@ classdef transientSpectra
                %convert spectra dims
                %from [pixels, delays, rpts, grating pos, schemes]
                %into [delays, pixels x rpts x grating pos x schemes]
-               nExtraDim = tmpObj.nPixels*tmpObj.nRpts*tmpObj.nGPos*tmpObj.nSchemes;
+               nExtraDim = tmpObj.sizes.nPixels*tmpObj.sizes.nRpts*tmpObj.sizes.nGPos*tmpObj.sizes.nSchemes;
                spectData = permute(spectData,[2,1,3,4,5]);
-               spectData = reshape(spectData,tmpObj.nDelays,nExtraDim);
+               spectData = reshape(spectData,tmpObj.sizes.nDelays,nExtraDim);
+               
+               %convert t dims
+               %from [delays, repeats, grating pos]
+               %into [delays, pixels x rpts x grating pos x schemes]
+               t = permute(t,[1,4,2,3,5]); %[delays, 1, rpts, grating pos, 1]
+               t = repmat(t,[1,tmpObj.sizes.nPixels,1,1,tmpObj.sizes.nSchemes]); %[delays, pixels, rpts, grating pos, schemes]
+               t = reshape(t,tmpObj.sizes.nDelays,nExtraDim); %[delays, pixels x rpts x grating pos x schemes]
                
                %loop over extra dims and fit 
-               t0Tmp = zeros(1,nExtraDim);
-                              
+               t0Tmp = zeros(1,nExtraDim);             
                for ii = 1:nExtraDim
                    %run lsqFitSigmoid, which fits data to y = a+b*0.5*(1+erf(sqrt(0.5)*(x-x0)/s));
                    %and returns fp as [a, b, x0, s]
-                   fp = lsqFitSigmoid(t, spectData(:,ii));
+                   fp = lsqFitSigmoid(t(:,ii), spectData(:,ii));
                    t0Tmp(1,ii) = fp(3);
                end
                
@@ -1881,8 +1912,7 @@ classdef transientSpectra
                %from [1,pixels x rpts x grating pos x schemes]
                %to [pixels, rpts, grating pos, schemes]
                %and store in t0 output and object member data
-               
-               t0Arr{objInd} = reshape(t0Tmp,tmpObj.nPixels,tmpObj.nRpts,tmpObj.nGPos,tmpObj.nSchemes);
+               t0Arr{objInd} = reshape(t0Tmp,tmpObj.sizes.nPixels,tmpObj.sizes.nRpts,tmpObj.sizes.nGPos,tmpObj.sizes.nSchemes);
                obj(objInd).t0 = doubleWithUnits(t0Arr{objInd},obj(objInd).t0);
             end
             
@@ -1895,6 +1925,67 @@ classdef transientSpectra
             if objNumel == 1
                t0Arr = t0Arr{1}; 
             end
+        end
+        
+        function obj = correctT0(obj, varargin)
+% CORRECTT0 adjusts the delay values according to t0 fit information stored
+% in the object member data. If the t0 fit has not been performed, this
+% method will call findT0 with it's default options. If multiple t0s
+% are available for any object, this method will by default correct the
+% delays with the average t0.
+%
+% todo: add logic that keeps track of whether t0 has been corrected or not
+%
+% obj = obj.CORRECTT0()
+%   Corrects the delays by an average t0 for each element of obj.
+% 
+% obj = obj.CORRECTT0('average', false)
+%   Corrects the delays by a t0 amount specific to the grating position and
+%   repeat, for each element of obj.
+%
+% See Also: FINDT0
+            
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            % Format varargin using input parser
+            p = inputParser;
+            p.FunctionName = 'correctT0';
+            p.addParameter('average', true, @(l) islogical(l));
+            
+            % Parse arguemnts, results will be in p.Results
+            p.parse(varargin{:});
+            
+            % Loop over individual object elements
+            for objInd = 1:objNumel
+                % Make sure t0 has been found. todo: use flag inside object to determine
+                if all(obj(objInd).t0.data == 0)
+                   obj(objInd) = obj(objInd).findT0;
+                end
+                
+                if p.Results.average
+                    % average all t0 values if flagged
+                    obj(objInd).t0.data = mean(obj(objInd).t0.data,'all','omitnan');
+                    
+                    % update all delays equally by averaged t0 value
+                    obj(objInd).delays.data = obj(objInd).delays.data - obj(objInd).t0.data;
+                else
+                    % Correct each grating position and repeat individually
+                    % average pixel t0 values for individual grating positions
+                    obj(objInd).t0.data = mean(obj(objInd).t0.data,1,'omitnan');
+                    
+                    % update all delays with implicit array dim expansion for t0
+                    obj(objInd).delays.data = obj(objInd).delays.data - obj(objInd).t0.data;
+                end
+            end
+            
+            % update object state to t0 has been corrected
+            obj.flags.t0Corr = true;
+            
+            % convert object array back to original size
+            obj = reshape(obj,objSize);
         end
     end
     

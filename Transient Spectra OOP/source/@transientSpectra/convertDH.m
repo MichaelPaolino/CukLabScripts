@@ -98,6 +98,7 @@ function obj = convertDH(obj, dh_static, dh_array)
     obj.spectra = doubleWithUnits([],spectraRules);
     obj.spectra_std = doubleWithUnits([],spectraRules);
     obj.delays = doubleWithUnits([],delayRules);
+    obj.t0 = doubleWithUnits(0,delayRules);
     obj.wavelengths = doubleWithUnits([],wlRules);
     
     %Format repeat and grating position temporary arrays into final formats
