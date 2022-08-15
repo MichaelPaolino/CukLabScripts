@@ -47,9 +47,11 @@ function varargout = lsqFitSigmoid(x, y)
     end
 
     % Setup guess for least squares search
-    %          a  b    x0  s
-    myGuess = [0  bG   x0  0.2]; %initial guess
-
+    %        a      b    x0      s
+    guess = [0,     bG,  x0,     0.2]; %initial guess
+    lb =    [-inf, -inf, min(x), 0];
+    ub =    [inf, inf,   max(x), inf];
+    
     % do the least squares fit
-    [varargout{1:nargout}] = lsqnonlin(@(fp) mySigmoid(fp(1),fp(2),fp(3),fp(4),x)-y,myGuess,[],[],opts);
+    [varargout{1:nargout}] = lsqnonlin(@(fp) mySigmoid(fp(1),fp(2),fp(3),fp(4),x)-y,guess,lb,ub,opts);
 end

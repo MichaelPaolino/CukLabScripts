@@ -70,3 +70,49 @@ testData = testData.subset('wavelengths',375:5:725);
 testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
 
 [testData, chirpParam] = testData.fitChirp('order',7,'wavelengths',365:5:735,'delays',[-3,3]);
+
+%% correct chirp tests
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
+
+testData = testData.fitChirp('order',7,'wavelengths',365:5:735,'delays',[-3,3]);
+
+%%
+% Test chirp correction with multi-d data set
+testData2 = testData.correctChirp();
+testData2 = testData2.average();
+testData2 = testData2.stitch();
+figure; 
+contourf(testData2.wavelengths.data, testData2.delays.data, testData2.spectra.data');
+
+% Test chirp correction with different central wavelengths:
+testData2 = testData.average();
+testData2 = testData2.stitch();
+testData3 = testData2.correctChirp('wlRef','min');
+figure; 
+contourf(testData3.wavelengths.data, testData3.delays.data, testData3.spectra.data');
+
+testData3 = testData2.correctChirp('wlRef','max');
+figure; 
+contourf(testData3.wavelengths.data, testData3.delays.data, testData3.spectra.data');
+
+testData3 = testData2.correctChirp('wlRef',400);
+figure; 
+contourf(testData3.wavelengths.data, testData3.delays.data, testData3.spectra.data');
+%% Generate test data for CC chirp correction
+% Test different interpolation and extrapolation strategies
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
+testData = testData.fitChirp('order',7,'wavelengths',365:5:735,'delays',[-3,3]);
+
+testData2 = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','short name','chirp');
+testData2 = testData2.trim('delays',[-3,3]);
+testData2.chirpParams = testData.chirpParams;
+%% Test different interpolation and extrapolation strategies
+testData3 = testData2.correctChirp('interp','spline');
+testData3 = testData2.correctChirp('extrap','extrap');
+testData3 = testData2.correctChirp('extrap',0);
+testData3 = testData2.correctChirp('extrap','none');
+testData3 = testData3.average;
+testData3 = testData3.stitch;
+
+figure; 
+contour(testData3.wavelengths.data, testData3.delays.data, -testData3.spectra.data',[-3:0.1:2]);
