@@ -1,7 +1,7 @@
 classdef wlTR < transientSpectra
    properties
-       t0Shift = 0;
        chirpParams = 0;
+       
        chirpCorrected = false;
    end
    
@@ -11,54 +11,86 @@ classdef wlTR < transientSpectra
    
    methods
        
-       function obj = correctChirp(obj, varargin)
+       function obj = setChirp(obj, chirpFit)
+        % SETCHIRP sets the chirp parameters for every element in the object array.
+        % This method accepts a *.mat file with a variable called chirpFit or a
+        % polyval vector of chirp parameters.
+        %
+        % obj = obj.SETCHIRP(chirpVector)
+        % obj = obj.SETCHIRP(filePath)
+        %   Sets the chirp parameters for every element of obj
+        %
+        % See Also: fitChirp, correctChirp, polyval
            
-% CORRECTCHIRP corrects the probe wavelength-dependent group delay (chirp)
-% by interpolating spectra data on a chirp-corrected delay. This
-% chirp-corrected delay is wavelength dependent and is determined by a
-% chirp correction polynomial. This polynomial is calculated by calling the
-% findChirp method. This polynomial is usually found from a seperate
-% calibration spectrum (e.g.high fluence OC with delays collected from
-% -3:0.1:3 ps). 
-%
-% Chirp correcion is applied as a wavelength-dependent offset for the
-% delay. This offset is calculated with respect to a reference wavelength,
-% which has zero offset. By default, this wavelength is the central
-% wavelength in each object element.
-%
-% This method also provides some degree of cosmetic processing to handle 
-% data clipping and extrapolation which occurs at the first and last 
-% delay. Clipping and extrapolation occurs for each wavelength that has a
-% non-zero chirp correction. By default, extrapolated values are also set 
-% to NaN.
-%
-% obj = obj.CORRECTCHIRP()
-%   Interpolates spectral data inside obj using internally assigned chirp 
-%   paramters. This call uses the default options of using the center 
-%   wavelength as the reference wavelength and without any extrapolation.
-%
-% obj = obj.CORRECTCHIRP(varargin)
-%   Interpolates spectra data inside obj with additional name-value pair
-%   options.
-%
-% Name-Value Pairs
-%   'chirpParams': (vector double) a vector of polynomial coefficients 
-%       (as defined by polyfit) to use for correction and to assign to all 
-%       object elements. The default is to use the object element member
-%       data.
-%   'extrap': (char or scalar) a constant value to assign to extrapolated
-%       points or a flag to override default interp1 extrap behavior. 
-%       Allowed flags are: 'none','extrap'. 'none' replaces extrapolated 
-%       points with NaN, and 'extrap' uses interp1 extrapolation. Default
-%       is 'none'.
-%   'wlRef': (char or scalar) the wavelength to use as the reference
-%       wavelength or a flag to calculate the reference wavelength. Allowed
-%       flags are: 'min', 'mid', or 'max' which choose the minimum, middle,
-%       or maximum wavelength in each object element. Default is 'mid'.
-%   'interp': (char) the interpolation method to use as defined by interp1.
-%       Default is 'linear'.
-%
-% See Also: FITCHIRP, INTERP1
+           % Use has an option to load chirp parameters from a .mat file
+           if ischar(chirpFit)
+              tmp = load(chirpFit);
+              chirpFit = tmp.chirpFit;
+           elseif ~isvector(chirpFit)
+              error('chirpParams expected path or polyval vector.');
+           end
+           
+           % Formtat object array dims into a column for easy looping
+           objSize = size(obj);
+           objNumel = numel(obj);
+           obj = obj(:);
+           
+           %loop through each object and update chirp params
+           for objInd = 1:objNumel
+               obj(objInd).chirpParams = chirpFit;
+           end
+               
+           %convert object back to original array dims
+           obj = reshape(obj,objSize);
+       end
+       
+       function obj = correctChirp(obj, varargin)
+        % CORRECTCHIRP corrects the probe wavelength-dependent group delay (chirp)
+        % by interpolating spectra data on a chirp-corrected delay. This
+        % chirp-corrected delay is wavelength dependent and is determined by a
+        % chirp correction polynomial. This polynomial is calculated by calling the
+        % findChirp method. This polynomial is usually found from a seperate
+        % calibration spectrum (e.g.high fluence OC with delays collected from
+        % -3:0.1:3 ps). 
+        %
+        % Chirp correcion is applied as a wavelength-dependent offset for the
+        % delay. This offset is calculated with respect to a reference wavelength,
+        % which has zero offset. By default, this wavelength is the central
+        % wavelength in each object element.
+        %
+        % This method also provides some degree of cosmetic processing to handle 
+        % data clipping and extrapolation which occurs at the first and last 
+        % delay. Clipping and extrapolation occurs for each wavelength that has a
+        % non-zero chirp correction. By default, extrapolated values are also set 
+        % to NaN.
+        %
+        % obj = obj.CORRECTCHIRP()
+        %   Interpolates spectral data inside obj using internally assigned chirp 
+        %   paramters. This call uses the default options of using the center 
+        %   wavelength as the reference wavelength and without any extrapolation.
+        %
+        % obj = obj.CORRECTCHIRP(varargin)
+        %   Interpolates spectra data inside obj with additional name-value pair
+        %   options.
+        %
+        % Name-Value Pairs
+        %   'chirpParams': (vector double) a vector of polynomial coefficients 
+        %       (as defined by polyfit) to use for correction and to assign to all 
+        %       object elements. The default is to use the object element member
+        %       data.
+        %   'extrap': (char or scalar) a constant value to assign to extrapolated
+        %       points or a flag to override default interp1 extrap behavior. 
+        %       Allowed flags are: 'none','extrap'. 'none' replaces extrapolated 
+        %       points with NaN, and 'extrap' uses interp1 extrapolation. Default
+        %       is 'none'.
+        %   'wlRef': (char or scalar) the wavelength to use as the reference
+        %       wavelength or a flag to calculate the reference wavelength. Allowed
+        %       flags are: 'min', 'mid', or 'max' which choose the minimum, middle,
+        %       or maximum wavelength in each object element. Default is 'mid'.
+        %   'interp': (char) the interpolation method to use as defined by interp1.
+        %       Default is 'linear'.
+        %
+        % See Also: FITCHIRP, INTERP1, POLYVAL
            
            % Format object array dims into a column for easy looping
            objSize = size(obj);
@@ -168,7 +200,7 @@ classdef wlTR < transientSpectra
                            case 'none'
                                % set all extrap values to NaN
                                spectra(inds) = NaN;
-    %                        case 'nearest'
+    %                        case 'nearest' todo: finish writing this...
     %                            % set all extrap values to nearest
     %                            spectra(inds) = sNearset(inds);
                        end
@@ -203,7 +235,7 @@ classdef wlTR < transientSpectra
         %   order polynomial.
         %
         % obj = obj.FITCHIRP(varargin)
-        %   Extracts the WLC group delay vs. wavelengths and fits to a polynomail
+        %   Extracts the WLC group delay vs. wavelengths and fits to a polynomial
         %   with the additional name-value pair options.
         %
         % [obj, chirpParam] = obj.FITCHIRP(__)
@@ -218,7 +250,8 @@ classdef wlTR < transientSpectra
         %   'order': (int) an integer > 0 that specifies the polynomial order of
         %      the group delay vs. wavelength. The default order is 5.
         %
-        % See Also: CORRECTCHIRP, FINDT0, CORRECTT0, LSQFITSIGMOID
+        % See Also: CORRECTCHIRP, FINDT0, CORRECTT0, LSQFITSIGMOID,
+        % POLYFIT, POLYVAL
            
            % Format object array dims into a column for easy looping
            objSize = size(obj);
@@ -305,5 +338,13 @@ classdef wlTR < transientSpectra
            obj = reshape(obj,objSize);
            chirpFit = reshape(chirpFit, [p.Results.order+1,objSize]);
        end
+       
+%        function [obj, phononObj] = fitPhonons(obj, phononModel)
+%            
+%        end
+%        
+%        function obj = removePhonons(obj, varargin)
+%            
+%        end
    end
 end

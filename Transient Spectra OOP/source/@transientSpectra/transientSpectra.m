@@ -12,22 +12,7 @@ classdef transientSpectra
         description = ''; %(char) description from the acquisition program
                          
         schemes = {}; %(cell array of char) that lists data schemes inside the object
-                         
-        %cosmetic information for data display. 
-        %todo: convert to class so that display method calls can auto parse
-        %varargin and return an updated  cosmetics object that can 
-        %auto-convert data and auto-update axis labels
-%         cosmetic = struct('pixelUnits','nm',...
-%                           'signalUnits','OD',...
-%                           'delayUnits','ps',...
-%                           'pixelLimits',[0,0],...
-%                           'delayLimits',[0,0],...
-%                           'targetScheme',1);
-%         
-%         baseUnits = struct('pixels','nm',...
-%                            'delay','ps',...
-%                            'signal','OD');
-        
+                                
         %size information
         sizes = struct('nRpts', 0, ...  %struct with fields type double defining the size of spectra dimensions
                        'nGPos', 0, ...
@@ -36,7 +21,7 @@ classdef transientSpectra
                        'nPixels', 0);
     end
     
-    properties (Access = protected)
+    properties %(Access = protected)
        flags = struct('isDefault', true,...%(logical) is this a default object (i.e. no data loaded)?
                       't0corr', false);    %(logical) has the t0 been corrected?
                       
@@ -149,7 +134,9 @@ classdef transientSpectra
                end
                
                %If data has been loaded succesfully, set each element default object flag to false
-               [obj(:).flags.isDefault] = deal(false);
+               for objInd = 1:argNumel
+                   obj(objInd).flags.isDefault = false;
+               end
                
            %%--PARSE KEYWORDS AND NAME_VALUE PAIRS--%%
                while argInd <= nargin

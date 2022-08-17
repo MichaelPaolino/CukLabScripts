@@ -116,3 +116,16 @@ testData3 = testData3.stitch;
 
 figure; 
 contour(testData3.wavelengths.data, testData3.delays.data, -testData3.spectra.data',[-3:0.1:2]);
+
+%% Set chirp parameters using setChirp
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
+testData = testData.fitChirp('order',7,'wavelengths',365:5:735,'delays',[-3,3]);
+
+% chirp param from vector
+testData2 = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','short name','chirp');
+testData2 = testData2.setChirp(testData.chirpParams);
+assert(all(testData2.chirpParams == testData.chirpParams),'Failed to set chirp params.');
+
+% chirp param from file
+testData2 = testData2.setChirp('chirpFitParam20Dec01.mat');
+assert(length(testData2.chirpParams)==8,'Failed to set chirp params.');

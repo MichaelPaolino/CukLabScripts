@@ -142,6 +142,31 @@ classdef fsrs < transientSpectra
                 @(f) 1./(1/obj.ramanPumpNm-1e-7*f));
         end
         
+        function obj = setRamanPump(obj, newNm)
+        % SETRAMANPUMP sets the raman pump wavelength in nm for each element in
+        % obj. Use this method when obj is an array of fsrs objects. Just like the
+        % accessor method, this method updates cm-1 unit definition as well.
+        % 
+        % obj = obj.SETRAMANPUMP(newNm)
+        %   Updates the raman pump wavelength in nm for each element in obj
+        % 
+        % todo: allow for newNm to be a fsrs object or array
+        % See Also: findRamanPumpNm, calibrateRamanPump
+
+            % Get object size and convert to column
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            % Set ramanPumpNm by element (could also use deal?)
+            for objInd = 1:objNumel
+               obj(onjInd).ramanPumpNm = newNm;
+            end
+            
+            %convert object array back to original size
+            obj = reshape(obj,objSize);
+        end
+        
     end
     
     methods (Access = protected)
