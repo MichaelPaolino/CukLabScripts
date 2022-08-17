@@ -4,13 +4,15 @@ myTS = transientSpectra();
 
 myTS = transientSpectra('Sample_BSP_Water_rpts_schemes_gpos_delays.mat');
 
+myTS = transientSpectra('Sample_BSP_Water_rpts_schemes_gpos_delays.mat','shortName','asdf');
+
 myTS = transientSpectra({'Sample_BSP_Water_rpts_schemes_gpos_delays.mat','Sample_BSP_Water_rpts_schemes_gpos_delays.mat','Sample_BSP_Water_rpts_schemes_gpos_delays.mat'});
 
 inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
               'spectra 2', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
               'spectra 3', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat'};    
 
-myTS = transientSpectra(inputTable(:,2),'short name',inputTable(:,1));
+myTS = transientSpectra(inputTable(:,2),'shortName',inputTable(:,1));
 
 %% Units
 myTS = testObjArray();
@@ -67,5 +69,5 @@ function obj = testObjArray()
                   'spectra 3', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
                   'spectra 4', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat'};
 
-    obj = transientSpectra(inputTable(:,2),'short name',inputTable(:,1));
+    obj = transientSpectra(inputTable(:,2),'shortName',inputTable(:,1));
 end

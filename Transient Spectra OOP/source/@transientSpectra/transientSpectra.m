@@ -21,7 +21,7 @@ classdef transientSpectra
                        'nPixels', 0);
     end
     
-    properties %(Access = protected)
+    properties (Access = protected)
        flags = struct('isDefault', true,...%(logical) is this a default object (i.e. no data loaded)?
                       't0corr', false);    %(logical) has the t0 been corrected?
                       
@@ -91,73 +91,59 @@ classdef transientSpectra
         % nm
         %
         % See also: DOUBLEWITHUNITS
-           
-        %%--PREFORMAT INPUT ARGS--%%
-           %To support object arrays, inputs classes will be queried as
-           %elements of cell arrays. If the input is not a cell array,
-           %convert it to a cell array first.
-           for ii = 1:nargin %loop over arguments
-               if ~iscell(varargin{ii}) %if argument is not already a scell
-                   varargin{ii} = {varargin{ii}}; %convert non-cell varargin elements to cell
+                   
+           if nargin==0 % construct a default object
+                % do nothing  
+           elseif nargin==1 && isvector(varargin{1}) %construct a default object array
+                % todo: write code to init default object array                
+           else % data is available, build non-default object array
+                              
+               % Use input parser to parse user arguments
+               p = inputParser;
+               
+               % Use valCell to validate both cell and non-cell inputs
+               p.FunctionName = 'transientSpectra';
+               p.addRequired('dataSource',@(p) valVarCell(p, @(c) ischar(c) || isa(c,'transientSpectra')));
+               p.addParameter('shortName','', @(p) valVarCell(p,@(c) ischar(c)));
+               p.parse(varargin{:});
+               %p.KeepUnmatched = true;
+               
+               %%--COPY DATA INTO OBJECT ARRAY--%%  
+               % convert parsed results into struct whose elements are cells
+               results = ensureCellVals(p.Results);
+               
+               argSize = size(results.dataSource);    %determine input cell array size, this will be the object array size
+               argNumel = numel(results.dataSource);  %for easy looping, loop over elements of arguments
+               results.dataSource = results.dataSource(:);    %for easy looping, convert dataSource into cell vector
+               results.shortName = results.shortName(:);
+               
+               % Ensure all fields are the same size as dataSource
+%                resultFields = fieldNames(p.Results);
+%                resultFields = fieldNames(~strcmp(fieldNames,'dataSource'));
+%                
+%                for fieldInd = 1:numel(resultFields)
+%                    p.Results.(resultFields(fieldInd))
+%                end
+               
+               % Create object array by loading data into last element first
+               % (this is recommended in MATLAB help)
+               obj(argNumel) = loadPath(obj(1),results.dataSource{argNumel});
+               
+               % Loop over remaining elemenets and update object member data
+               for objInd = 1:argNumel-1
+                   obj(objInd) = loadPath(obj(objInd),results.dataSource{objInd});
                end
-           end
-        
-        %%--BUILD OBJECT--%%
-           if nargin==0 %constructs a default object --do nothing  
                
-           else %data is available, build non-default object
-           %%--COPY DATA INTO OBJECT ARRAY--%%       
-               argSize = size(varargin{1});      %determine input cell array size, this will be the object array size
-               argNumel = numel(varargin{1});    %for easy looping, loop over elements of arguments
-               argInd = 1;  %keep track of which argument is being parsed
-               
-               argCell = varargin{argInd}(:);
-               
-               %first set of inputs are data containing. Parse these first before name-value paris
-               if ischar(varargin{argInd}{1}) && argInd == 1   %file path load routine
-                   %initialize object by loading path
-                   obj(argNumel) = loadPath(obj(1),argCell{argNumel});  %todo: loop inside loadPath?
-                   for objInd = 1:argNumel-1
-                      obj(objInd) = loadPath(obj(objInd),argCell{objInd});
-                   end
-                   argInd = argInd + 1;
-               elseif isa(varargin{argInd}{1},'data_holder')    %data holder object load routine
-                   argInd = argInd + 1;
-               elseif isa(varargin{argInd}{1},'transientSpectra')   %conversion from child object to this class
-                   argInd = argInd + 1;
-               elseif isstruct(varargin{argInd}{1}) && nargin > 1   %dh_static and dh_array load routine
-                   argInd = argInd + 2;
-               else    %invalid 1st argument
-                   error(['1st argument must pass data to object. Allowed data classes are an element ',...
-                          'or cell array of: char, data_holder, struct, or transientSpectra. Got ',...
-                          class(varargin{argInd}{1}) '.']);
-               end
-               
-               %If data has been loaded succesfully, set each element default object flag to false
+               % Update any optional paramters
                for objInd = 1:argNumel
+                   % Update short name if it exists
+                   if ~isempty(results.shortName{objInd})
+                        obj(objInd).shortName = results.shortName{objInd};
+                   end
+                   
+                   %If data has been loaded succesfully, set each element default object flag to false
                    obj(objInd).flags.isDefault = false;
                end
-               
-           %%--PARSE KEYWORDS AND NAME_VALUE PAIRS--%%
-               while argInd <= nargin
-                   assert(ischar(varargin{argInd}{1}),['Expected element or cell array of chars for ',...
-                          'keywords or name-value pairs. Got ' class(varargin{argInd}{1}) '.']);
-                   switch varargin{argInd}{1}
-                       case 'short name'
-                           assert(argInd+1<=nargin,'Name-value pair short name requires an additional char input');
-                           assert(ischar(varargin{argInd+1}{1}),'Name-value pair short name requires an additional',...
-                                  ' char or cell array of char input.');
-                           assert(numel(varargin{argInd+1})==argNumel,['The number of short names must',...
-                                  'match the number of objects. Expected ' num2str(argNumel) ' elements, got ',...
-                                   num2str(numel(varargin{argInd+1})) ' elements.']);
-                               
-                           %assign array of arguments directly using deal
-                           [obj(:).shortName] = deal(varargin{argInd+1}{:});
-                           argInd = argInd + 2;
-                       otherwise %throw error to avoid infinite loop
-                           error([varargin{argInd}{1} ' is an unsupported keyword or name-value pair.']);
-                   end %switch
-               end %while
                
            %%--FINAL OBJECT FORMATTING--%%
                %reshape object to match input array shape
