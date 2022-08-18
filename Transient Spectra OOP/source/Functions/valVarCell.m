@@ -1,7 +1,7 @@
 function tf = valVarCell(c,v)
-% VALVARCELL validates c with validation function v for both cell and
-% non-cell inputs of c. If c is a cell, v validates all elements of c
-% individually. If c is not a cell, v validates c directly.
+% VALVARCELL validates an input c with a validation function v for both 
+% cell and non-cell inputs of c. If c is a cell, v validates all elements
+% of c individually. If c is not a cell, v validates c directly.
 %
 % tf = VALVARCELL(v, c)
 %   Validate c directly or the elements of c using validation function v,

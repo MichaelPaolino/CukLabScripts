@@ -6,12 +6,11 @@ classdef fsrs < transientSpectra
 
     % Constructor, load, get and set methods with custom implementation
     methods
-    %%CONSTRUCTOR/LOAD METHODS%%
-
         function obj = fsrs(varargin)
         % A FSRS object contains FSRS-specific funtionality in addition to
         % everything inside the transientSpectra class. The main additional feature
-        % is defining a raman pump wavelength and the raman pump unit.
+        % is defining a raman pump wavelength and the raman pump unit, along with 
+        % supporting methods to automate processing.
         % 
         % obj = fsrs(...);
         %   Constructs a fsrs object with the same arguments as the transientSpectra
@@ -30,107 +29,72 @@ classdef fsrs < transientSpectra
         %
         % See also: TRANSIENTSPECTRA, DOUBLEWITHUNITS
             
-        %%--SPLIT FSRS SPECIFIC AND TRANSIENT SPECTRA SPECIFIC ARGS--%%
-            %fsrs specific arguments
-            %cell array of fsrs specific keywords
-            fsrsKeywords = {'ramanPumpNm'};
-            %double array of corresponding input argument length for each
-            %keyword (1 for keyword, 2 for name-value pair, etc.)
-            fsrsArgLen = [2];
+            % First parse input args to determine what should be passed to the superclass constructor
+            if nargin > 0
+                % Use input parser to parse user arguments
+                p = inputParser;
+                p.FunctionName = 'fsrs';
+                p.StructExpand = false;
+                p.KeepUnmatched = true; %unmatched inputs will be passed to superclass
+
+                % Use valVarCell to validate both cell and non-cell inputs
+                % dataSource validation: handled in superclass
+                p.addRequired('dataSource');
+                % ramanPumpNm validation: must be a scalar number
+                p.addParameter('ramanPumpNm','', @(p) valVarCell(p,@(c) isscalar(c) && ~ischar(c)));
+
+                % parse inputs and store results in struct p.Results and unmatched inputs in p.Unmatched
+                p.parse(varargin{:});
+
+                % Build superclass arguments as cell array from unmatched results
+                fn = fieldnames(p.Unmatched);   %cell array of field names
+                fVal = struct2cell(p.Unmatched);    %cell array of value names
+                superClassArgs = [fn(:), fVal(:)]'; %cell array of name-value pairs [2, nArgs]
+                superClassArgs = [{p.Results.dataSource}; superClassArgs(:)]; %cell array of dataSource, name-value pairs [dataSource; 2*nArgs]
             
-            %Loop over varargin and if the arguemnt keyword matches a fsrs keyword:
-            %1. set it as empty
-            %2. add it to the fsrs args
-            %3. update iterator by expected length of keyword/name-value pair
-            superClassArgs = varargin;  %these will be sent to the transientSpectra constructor
-            subClassArgs = cell(size(varargin));   %these will be parsed inside the fsrs constructor
-            argInd = 1;
-            
-            while argInd <= nargin  %loop until the end of varargin is reached
-               if ischar(superClassArgs{argInd})    %ensure the current argument is of type char (i.e. a keyword and not numeric/cell)
-                   cmpArgInd = strcmp(superClassArgs{argInd},fsrsKeywords);
-                   if any(cmpArgInd)  %if the argument matches any of the fsrs keywords
-                       %Ensure that the passed argument name is unique
-                       assert(sum(cmpArgInd)==1,'Multiple fsrs arguments with the same name are not allowed.');
-                       
-                       %Distribute arguments to sub and superclass arg cell arrays
-                       subClassArgs(argInd:argInd+fsrsArgLen(cmpArgInd)-1) = superClassArgs(argInd:argInd+fsrsArgLen(cmpArgInd)-1);   %copy fsrs args into fsrs arg list
-                       superClassArgs(argInd:argInd+fsrsArgLen(cmpArgInd)-1) = {[]}; %set the transientSpectra keyword and antecedent values to empty (flag for removal)
-                       argInd = argInd + fsrsArgLen;    %update iterator by argument length
-                   else %this is a superclass argument
-                       argInd = argInd + 1;    %update iterator by 1
-                   end
-               else %this is a superclass argument
-                   argInd = argInd + 1;    %update iterator by 1
-               end
+            else %constructs default fsrs object
+                superClassArgs = {};
             end
             
-            % remove empty cell elements
-            subClassArgs = subClassArgs(~cellfun(@isempty,subClassArgs));
-            superClassArgs = superClassArgs(~cellfun(@isempty,superClassArgs));
-            nSubClassArgs = numel(subClassArgs);
+            % Pass unmatched arguments to superclass and build object
+            obj@transientSpectra(superClassArgs{:}); 
             
-        %%--BUILD SUPERCLASS OBJECT--%%
-            obj = obj@transientSpectra(superClassArgs{:}); 
-            
-        %%--PARSE SUBCLASS ARGS--%%
-           %Default options for fsrs
-           doSplitSchemes = false;
-        
-           %To support object arrays, inputs classes will be queried as
-           %elements of cell arrays. If the input is not a cell array,
-           %convert it to a cell array first.
-           for ii = 1:nSubClassArgs %loop over fsrs args
-               if ~iscell(subClassArgs{ii}) %if input is not already a cell
-                   subClassArgs{ii} = {subClassArgs{ii}}; %convert non-cell varargin elements to cell
-               end
-           end
-           
-           %get object size to be able to assign values to each element individually
-           objSize = size(obj); %original object size
-           argNumel = numel(obj);   %number of object elements (and cell length of expected inputs)
-           obj = obj(:);    %for easy looping/assignemnt
-           
-           %loop over arguments and parse keywords/name-value pairs
-           argInd = 1;
-           while argInd <= nSubClassArgs
-               %each keyword or name-value pair must start with a char argument
-               assert(ischar(subClassArgs{argInd}{1}),['Expected element or cell array of chars for ',...
-                      'keywords or name-value pairs. Got ' class(subClassArgs{argInd}{1}) '.']);
-               
-               %parse the keyword in the current index
-               switch subClassArgs{argInd}{1}
-                   case 'ramanPumpNm'   %assign the raman pump wavelength
-                       %perform checks on value input type
-                       assert(argInd+1<=nSubClassArgs,'Name-value pair ramanPumpNm requires an additional double input');
-                       assert(isscalar(subClassArgs{argInd+1}{1}),'Name-value pair ramanPumpNm requires an additional',...
-                              ' scalar or cell array of scalar input.');  
-                       assert(any(numel(subClassArgs{argInd+1})==[1,argNumel]),['The number of ramanPumpNm must be 1 or',...
-                              'match the number of objects. Expected 1 or ' num2str(argNumel) ' elements, got ',...
-                               num2str(numel(subClassArgs{argInd+1})) ' elements.']); 
-                           
-                       %assign array of arguments directly using deal. This works for both 1 or several pump wavelengths
-                       [obj(:).ramanPumpNm] = deal(subClassArgs{argInd+1}{:});
-                       argInd = argInd + 2;
-                   otherwise %throw error to avoid infinite loop
-                       error([subClassArgs{argInd}{1} ' is an unsupported keyword or name-value pair.']);
-               end
-           end
-           
-        %%--FINAL OBJECT FORMATTING--%%
-           % reshape object to match input array size
-           obj = reshape(obj, objSize);
+            % Update constructed object with fsrs-specific arguments
+            if nargin > 0
+                % Parse subclass args
+                % Convert object array to 1D array for easy looping
+                objSize = size(obj);    %remember the original object size
+                objNumel = numel(obj);  %for easy looping, loop over elements of arguments
+                obj = obj(:); %convert object to vector array
+
+                % convert parsed results into struct whose elements are cells
+                results = ensureCellVals(p.Results);
+                % ensure that the cell array size matches the object size by and convert into column vector
+                results.ramanPumpNm = explicitExpand(results.ramanPumpNm, objSize);
+                results.ramanPumpNm = results.ramanPumpNm(:);
+
+                % Loop over object array elements
+                for objInd = 1:objNumel
+                    % Update RamanPumpNm if it exists
+                    if ~isempty(results.ramanPumpNm{objInd})
+                        obj(objInd).ramanPumpNm = results.ramanPumpNm{objInd};
+                    end
+                end
+
+               % reshape object to match input array size
+               obj = reshape(obj, objSize);
+            end
         end
                 
-        %%GET/SET METHODS%% 
-        
-        %Set the raman pump nm. This updates the raman shift unit
-        %definition, which is why it requires an explicit set method.
         function obj = set.ramanPumpNm(obj,newNm)
-        % Update ramanPumpNm to a new value. 
+        % Update ramanPumpNm to a new value. Note: this method only works for
+        % single fsrs object elements. Use setRamanPump() for object array
+        % functionality.
         % 
         % obj(ind).ramanPumpNm = newVal;
         %   Updates ramanPumpNm and recalculates the rcm-1 unit
+        %
+        % See Also: setRamanPump
             
             obj.ramanPumpNm = newNm;
             
@@ -146,11 +110,18 @@ classdef fsrs < transientSpectra
         % SETRAMANPUMP sets the raman pump wavelength in nm for each element in
         % obj. Use this method when obj is an array of fsrs objects. Just like the
         % accessor method, this method updates cm-1 unit definition as well.
+        %
+        % The new wavelength can be input as either a scalar, double array, or fsrs
+        % object array. For the array cases, this method supports expansion of
+        % singleton dimensions to match the size of calling fsrs object.
         % 
         % obj = obj.SETRAMANPUMP(newNm)
-        %   Updates the raman pump wavelength in nm for each element in obj
+        %   Updates the raman pump wavelength in nm to newNm for each element in
+        %   obj. If newNm is a scalar, the same value is assigned to each element.
+        %   If newNm is a fsrs object, the ramanPumpNm value is copied from newNm
+        %   into obj. If newNm is an array, the array's singleton dimensions are 
+        %   expanded to match the size of obj. 
         % 
-        % todo: allow for newNm to be a fsrs object or array
         % See Also: findRamanPumpNm, calibrateRamanPump
 
             % Get object size and convert to column
@@ -158,9 +129,20 @@ classdef fsrs < transientSpectra
             objNumel = numel(obj);
             obj = obj(:);
             
+            % if input is a fsrs object array, extract ramanPumpNm and
+            % convert to matrix of the same size as newNm
+            if isa(newNm,'fsrs')
+                newNmSz = size(newNm);
+                newNm = {newNm(:).ramanPumpNm};
+                newNm = reshape(cell2mat(newNm),newNmSz);
+            end
+            
+            % Expand singleton dims of newNm to match the size of objSize
+            newNm = explicitExpand(newNm,objSize);
+            
             % Set ramanPumpNm by element (could also use deal?)
             for objInd = 1:objNumel
-               obj(onjInd).ramanPumpNm = newNm;
+               obj(objInd).ramanPumpNm = newNm(objInd);
             end
             
             %convert object array back to original size
@@ -169,6 +151,7 @@ classdef fsrs < transientSpectra
         
     end
     
+    % Protected methods that define the inner workings of the class
     methods (Access = protected)
         %override superclass convertDH method to convert multi-scheme data
         %into specific scheme objects. Call this to load multiple objects
@@ -217,7 +200,6 @@ classdef fsrs < transientSpectra
     
     % Methods specific to the fsrs class that cannot be implemented in the transientSpectra class
     methods
-        
         function [obj, pumpNm] = findRamanPumpNm(obj, varargin)
         % FINDRAMANPUMPNM automatically finds the raman pump wavelength in nm. This
         % is useful for a rough calibration fo the raman shift for quick data

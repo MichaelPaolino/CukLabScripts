@@ -26,10 +26,10 @@ myFSRS = fsrs('Sample_BSP_Air.mat');
 %assert(myTR ~= fsrs(),'myTR is empty');
 
 % load a acquisition gs FSRS and assign a short name
-myFSRS = fsrs('Sample_None_Methanol.mat','short name','methanol');
+myFSRS = fsrs('Sample_None_Methanol.mat','shortName','methanol');
 
 % load a acquisition gs FSRS, assign a short name, and assign the raman pump wavelength
-myFSRS = fsrs('Sample_None_Methanol.mat','short name','methanol','ramanPumpNm',397.6);
+myFSRS = fsrs('Sample_None_Methanol.mat','shortName','methanol','ramanPumpNm',397.6);
 assert(myFSRS.ramanPumpNm == 397.6, 'failed to assign raman pump wavelength');
 
 % load a multi-scheme data set 
@@ -41,7 +41,7 @@ inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
               'spectra 2', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
               'spectra 3', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat'};    
 
-myFSRS = fsrs(inputTable(:,2),'short name',inputTable(:,1),'ramanPumpNm',397.6);
+myFSRS = fsrs(inputTable(:,2),'shortName',inputTable(:,1),'ramanPumpNm',397.6);
 assert(all(size(myFSRS)==[3,1]),'Failed to construct fsrs object array');
 assert(all([myFSRS.ramanPumpNm]==397.6*ones(1,3)),'Failed to assign raman pump wavelength to fsrs object array');
 
@@ -152,6 +152,22 @@ myFSRS = myFSRS.average;
 myFSRS = myFSRS.stitch;
 myFSRS = myFSRS.findRamanPumpNm;
 myFSRS.plotSpectra;
+
+%% test updating raman pump wavelength using array functionality
+myFSRS = repmat(testObjArray1(),1,2);
+
+% Assignment using 1 element
+myFSRS = myFSRS.setRamanPump(405);
+assert(all(cell2mat({myFSRS.ramanPumpNm}) == repmat(405,1,6)),'failed to set all raman pump wavelengths');
+
+% Assignment using singleton expansion
+myFSRS = myFSRS.setRamanPump([400; 401; 402]);
+assert(all(cell2mat({myFSRS.ramanPumpNm}) == repmat([400,401,402],1,2)),'failed to set all raman pump wavelengths');
+
+% Assignment using fsrs object
+myFSRS(1,1) = myFSRS(1,1).setRamanPump(399);
+myFSRS = myFSRS.setRamanPump(myFSRS(1,1));
+assert(all(cell2mat({myFSRS.ramanPumpNm}) == repmat(399,1,6)),'failed to set all raman pump wavelengths');
 
 %% test stiching multiple grating positions
 myFSRS = fsrs('Sample_OC_D2O.mat');
@@ -265,12 +281,12 @@ figure;
 myFSRS.plotSpectra();
 
 %% Export tests
-myTR = fsrs('Sample_BSP_Air.mat','short name','chirp 8 bounces');
+myTR = fsrs('Sample_BSP_Air.mat','shortName','chirp 8 bounces');
 myTR.wavelengths.unit = 'nm';
 outputStruct = myTR.export('test.mat','kinetics',[400,425,450]);
 assert(length(outputStruct)==6,'Did not generate the correct outputStruct');
 
-myFSRS = fsrs('Sample_OC_D2O.mat','short name','STO in D2O');
+myFSRS = fsrs('Sample_OC_D2O.mat','shortName','STO in D2O');
 myFSRS.wavelengths.unit = 'nm';
 outputStruct = myFSRS.export('test.mat','append',true);
 assert(length(outputStruct)==6,'Did not generate the correct outputStruct');
@@ -294,7 +310,7 @@ function obj = testObjArray1()
                   'spectra 2', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
                   'spectra 3', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat'};    
 
-    obj = fsrs(inputTable(:,2),'short name',inputTable(:,1),'ramanPumpNm',397.6);
+    obj = fsrs(inputTable(:,2),'shortName',inputTable(:,1),'ramanPumpNm',397.6);
 end
 
 function obj = testObjArray2()
@@ -302,5 +318,5 @@ function obj = testObjArray2()
     inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
                   'spectra 2', 'Sample_OC_D2O.mat'};    
 
-    obj = fsrs(inputTable(:,2),'short name',inputTable(:,1),'ramanPumpNm',397.6);
+    obj = fsrs(inputTable(:,2),'shortName',inputTable(:,1),'ramanPumpNm',397.6);
 end

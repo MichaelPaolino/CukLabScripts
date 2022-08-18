@@ -47,7 +47,9 @@ classdef transientSpectra
         % 
         % This constructor accepts single inputs or a cell array of inputs of the 
         % correct type. If a cell array is passed, the constructor will generate an
-        % object array that is the same size as the cell array.
+        % object array that is the same size as the first argument cell array. 
+        % Additional argument's singleton dimentions will be expanded to match the 
+        % size of the first argument.
         %
         % obj = TRANSIENTSPECTRA(); 
         %	Construct a default TRANSIENTSPECTRA object.
@@ -64,8 +66,6 @@ classdef transientSpectra
         %	Constructs a TRANSIENTSPECTRA object with additional options specified
         %	by varargin. varargin is a comma sperated list of keywords and/or
         %	name-value pairs. 
-        %
-        % Kewords: (currently none)
         %
         % Name-Value pairs:
         %   'short name' (char or cell of char) set the object's short name
@@ -93,37 +93,36 @@ classdef transientSpectra
         % See also: DOUBLEWITHUNITS
                    
            if nargin==0 % construct a default object
-                % do nothing  
-           elseif nargin==1 && isvector(varargin{1}) %construct a default object array
-                % todo: write code to init default object array                
+                % do nothing              
            else % data is available, build non-default object array
                               
                % Use input parser to parse user arguments
                p = inputParser;
-               
-               % Use valCell to validate both cell and non-cell inputs
                p.FunctionName = 'transientSpectra';
-               p.addRequired('dataSource',@(p) valVarCell(p, @(c) ischar(c) || isa(c,'transientSpectra')));
-               p.addParameter('shortName','', @(p) valVarCell(p,@(c) ischar(c)));
-               p.parse(varargin{:});
-               %p.KeepUnmatched = true;
+               p.StructExpand = false;
                
-               %%--COPY DATA INTO OBJECT ARRAY--%%  
+               % Use valVarCell to validate both cell and non-cell inputs
+               % Must be a char array or cell array of char array
+               p.addRequired('dataSource',@(p) valVarCell(p, @(c) ischar(c)));
+               % Must be a char array or cell array of char array
+               p.addParameter('shortName','', @(p) valVarCell(p,@(c) ischar(c)));
+               
+               % parse inputs and store results in struct p.Results
+               p.parse(varargin{:}); 
                % convert parsed results into struct whose elements are cells
                results = ensureCellVals(p.Results);
                
-               argSize = size(results.dataSource);    %determine input cell array size, this will be the object array size
-               argNumel = numel(results.dataSource);  %for easy looping, loop over elements of arguments
-               results.dataSource = results.dataSource(:);    %for easy looping, convert dataSource into cell vector
-               results.shortName = results.shortName(:);
+               % determine desired size of the object based on size of dataSource cell array
+               argSize = size(results.dataSource);    
+               argNumel = numel(results.dataSource);  %for easy looping, the number of elements
                
-               % Ensure all fields are the same size as dataSource
-%                resultFields = fieldNames(p.Results);
-%                resultFields = fieldNames(~strcmp(fieldNames,'dataSource'));
-%                
-%                for fieldInd = 1:numel(resultFields)
-%                    p.Results.(resultFields(fieldInd))
-%                end
+               % ensure that the cell array size matches the object size by and convert into column vector
+               results.shortName = explicitExpand(results.shortName, argSize);
+               results.dataSource = results.dataSource(:);    %for easy looping, convert dataSource into cell vector
+               results.shortName = results.shortName(:);      %for easy looping, convert shortName into cell vector
+               
+               % todo: Ensure all fields are the same size as dataSource or
+               % explicitExpand
                
                % Create object array by loading data into last element first
                % (this is recommended in MATLAB help)

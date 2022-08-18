@@ -1,8 +1,11 @@
 function structOut = ensureCellVals(structIn)
-% ENSURECELLVALS converts all elements of the input struct to cells.
+% ENSURECELLVALS converts all non-cell elements of the input struct to 
+% cells. This means if the element is already a cell, a nested cell will
+% not be created. Meanwhile, if the element is not a cell, its contents
+% will be wrapped in a 1x1 cell array.
 %
 % structOut = ensureCellVals(structIn)
-%   Converts all elements of structIn into cells
+%   Converts all non-cell elements of structIn into cells
 
 % get field names
 fn = fieldnames(structIn);
