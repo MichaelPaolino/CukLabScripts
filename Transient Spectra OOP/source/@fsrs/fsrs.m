@@ -30,7 +30,9 @@ classdef fsrs < transientSpectra
         % See also: TRANSIENTSPECTRA, DOUBLEWITHUNITS
             
             % First parse input args to determine what should be passed to the superclass constructor
-            if nargin > 0
+            if nargin == 0 %constructs default fsrs object
+                superClassArgs = {};
+            else %construct fsrs object from data
                 % Use input parser to parse user arguments
                 p = inputParser;
                 p.FunctionName = 'fsrs';
@@ -50,10 +52,7 @@ classdef fsrs < transientSpectra
                 fn = fieldnames(p.Unmatched);   %cell array of field names
                 fVal = struct2cell(p.Unmatched);    %cell array of value names
                 superClassArgs = [fn(:), fVal(:)]'; %cell array of name-value pairs [2, nArgs]
-                superClassArgs = [{p.Results.dataSource}; superClassArgs(:)]; %cell array of dataSource, name-value pairs [dataSource; 2*nArgs]
-            
-            else %constructs default fsrs object
-                superClassArgs = {};
+                superClassArgs = [{p.Results.dataSource}; superClassArgs(:)]; %cell array of dataSource, name-value pairs [dataSource; 2*nArgs]                
             end
             
             % Pass unmatched arguments to superclass and build object
@@ -80,9 +79,12 @@ classdef fsrs < transientSpectra
                         obj(objInd).ramanPumpNm = results.ramanPumpNm{objInd};
                     end
                 end
-
-               % reshape object to match input array size
-               obj = reshape(obj, objSize);
+               
+                %set default units
+                obj = obj.setUnits('rcm-1','ps','mOD');
+                
+                % reshape object to match input array size
+                obj = reshape(obj, objSize);
             end
         end
                 
@@ -153,48 +155,49 @@ classdef fsrs < transientSpectra
     
     % Protected methods that define the inner workings of the class
     methods (Access = protected)
-        %override superclass convertDH method to convert multi-scheme data
-        %into specific scheme objects. Call this to load multiple objects
-        function obj = convertDH(obj, dh_static, dh_array)
-        % CONVERTDH for FSRS class calls parent class TRANSIENTSPECTRA CONVERTDH 
-        % and assigns FSRS specific units to the spectra, wavelengths, and delays.
+        %override superclass assignUnits method
+        function [obj,unitRules] = assignUnits(obj)
+        % for FSRS class calls parent class TRANSIENTSPECTRA ASSIGNUNITS 
+        % and assigns FSRS specific units to the spectra and wavelengths.
         %
         % FSRS specific units are:
         %   Spectra: (%Gain) Raman gain in % or (ppmGain) in ppm
         %   Delays: none
         %   Wavelengths: (rcm-1) Raman shift away from the fundamental in cm-1
         %
-        % The default units for a FSRS object are mOD, ps, and rcm-1
-        %
         % See also: DOUBLEWITHUNITS
             
             %call parent method first for generic conversion of dh_array to transientSpectra
-            obj = convertDH@transientSpectra(obj, dh_static, dh_array);
+            [obj,unitRules] = assignUnits@transientSpectra(obj);
             
-            %add unit rules to spectra, delays, etc. todo: add to method or as a subclass of doubleWithUnits class
-            %spectra
-            spectraRules = doubleWithUnits([],obj.spectra);
+            %add unit rules to spectra, delays, etc. 
+            spectraRules = doubleWithUnits([],unitRules.spectraRules);
             spectraRules = spectraRules.addRule('%Gain','Raman Gain (%)',@(f) 1e2*(10.^f-1), @(f) log10(1+1e-2*f));
             spectraRules = spectraRules.addRule('ppmGain','Raman Gain (ppm)',@(f) 1e6*(10.^f-1), @(f) log10(1+1e-6*f));
             
-            %delays (currently does nothing)
-            delayRules = doubleWithUnits([],obj.delays);
-            
             %wavelengths
-            wlRules = doubleWithUnits([],obj.wavelengths);            
+            wlRules = doubleWithUnits([],unitRules.wlRules);            
             wlRules = wlRules.addRule('rcm-1','Raman Shift (cm^{-1})',...
                 @(f) 1e7*(1/obj.ramanPumpNm-1./f),...
                 @(f) 1./(1/obj.ramanPumpNm-1e-7*f));
             
-            %update object data to include new units. In addition, force
-            %data to be real-valued
-            obj.spectra = doubleWithUnits(real(obj.spectra.data),spectraRules);
-            obj.spectra_std = doubleWithUnits(real(obj.spectra_std.data),spectraRules);
-            obj.delays = doubleWithUnits(real(obj.delays.data),delayRules);
-            obj.wavelengths = doubleWithUnits(real(obj.wavelengths.data),wlRules);
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
             
-            %set default units
-            obj = obj.setUnits('rcm-1','ps','mOD');
+            % Assign unit rules to object data for each object array element, while keeping existing data
+            for objInd = 1:objNumel
+                obj(objInd).spectra = doubleWithUnits(real(obj(objInd).spectra.data),spectraRules);
+                obj(objInd).spectra_std = doubleWithUnits(real(obj(objInd).spectra_std.data),spectraRules);
+                obj(objInd).wavelengths = doubleWithUnits(real(obj(objInd).wavelengths.data),wlRules); 
+            end
+            
+            %convert object array back to original size
+            obj = reshape(obj,objSize);
+            
+            %package unit rules to unitrules struct
+            unitRules = struct('spectraRules',spectraRules,'delayRules',unitRules.delayRules,'wlRules',wlRules);
         end
     end
     

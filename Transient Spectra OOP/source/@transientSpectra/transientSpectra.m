@@ -102,35 +102,35 @@ classdef transientSpectra
                p.StructExpand = false;
                
                % Use valVarCell to validate both cell and non-cell inputs
-               % Must be a char array or cell array of char array
-               p.addRequired('dataSource',@(p) valVarCell(p, @(c) ischar(c)));
-               % Must be a char array or cell array of char array
-               p.addParameter('shortName','', @(p) valVarCell(p,@(c) ischar(c)));
+               p.addRequired('dataSource',@(p) valVarCell(p, @(c) ischar(c))); % Must be a char array or cell array of char array
+               p.addParameter('shortName','', @(p) valVarCell(p,@(c) ischar(c))); % Must be a char array or cell array of char array
+               p.addParameter('loadType','dataHolder', @(p) valVarCell(p,@(c) ischar(c))); % Must be a char array or cell array of char array
                
                % parse inputs and store results in struct p.Results
                p.parse(varargin{:}); 
+               
                % convert parsed results into struct whose elements are cells
                results = ensureCellVals(p.Results);
                
                % determine desired size of the object based on size of dataSource cell array
-               argSize = size(results.dataSource);    
+               argSize = size(results.dataSource);    %this will be the final size of the object data
                argNumel = numel(results.dataSource);  %for easy looping, the number of elements
-               
+               results.dataSource = results.dataSource(:); %for easy looping, convert dataSource into cell vector [n x 1]
+                
                % ensure that the cell array size matches the object size by and convert into column vector
+               results.loadType = explicitExpand(results.loadType, argSize);
+               results.loadType = results.loadType(:); %for easy looping, convert shortName into cell vector
+
                results.shortName = explicitExpand(results.shortName, argSize);
-               results.dataSource = results.dataSource(:);    %for easy looping, convert dataSource into cell vector
-               results.shortName = results.shortName(:);      %for easy looping, convert shortName into cell vector
-               
-               % todo: Ensure all fields are the same size as dataSource or
-               % explicitExpand
+               results.shortName = results.shortName(:); %for easy looping, convert shortName into cell vector
                
                % Create object array by loading data into last element first
                % (this is recommended in MATLAB help)
-               obj(argNumel) = loadPath(obj(1),results.dataSource{argNumel});
+               obj(argNumel) = obj(1).importData(results.dataSource{argNumel},results.loadType{argNumel});
                
                % Loop over remaining elemenets and update object member data
                for objInd = 1:argNumel-1
-                   obj(objInd) = loadPath(obj(objInd),results.dataSource{objInd});
+                   obj(objInd) = obj(objInd).importData(results.dataSource{objInd},results.loadType{objInd});
                end
                
                % Update any optional paramters
@@ -144,7 +144,12 @@ classdef transientSpectra
                    obj(objInd).flags.isDefault = false;
                end
                
-           %%--FINAL OBJECT FORMATTING--%%
+               % Assign units to relevant numeric data. This method can be overriden in a subclass
+               obj = obj.assignUnits();
+               
+               %Set default units
+               obj = obj.setUnits('nm','ps','mOD');
+               
                %reshape object to match input array shape
                obj = reshape(obj,argSize);
                
@@ -517,50 +522,139 @@ classdef transientSpectra
             
     end
     
-    %% Protected methods (loading data into object)
+    %% Protected methods that define the inner workings of the class
     %Use constructor to load data.
     methods (Access = protected)
 
-        function varargout = loadPath(obj,myPath)
-        % LOADPATH loads a .mat file from a path and converts to a FSRS object.
-        % Currently LOADPATH only supports loading dataHolder member data, i.e. the
-        % structurs dh_static and dh_array and not the object itself.
+        function obj = importData(obj,myPath,loadType)
+        % IMPORTDATA loads a file from a path using the import method specified by
+        % a load type and populates the objects member data. This method is 
+        % designed to dispatch the correct import/load method and not implement a
+        % specific import/load routine, therby allowing the developer to override 
+        % import implementations in subclasses. 
         % 
-        % obj = obj.LOADPATH(path);
+        % Override this method to implement subclass-specific load types. The
+        % recommended call order is for the subclass to run its specific
+        % implementation first using a switch...case statement and then call the 
+        % superclass implementation in the otherwise clause. This superclass method
+        % returns an error when an unsupported load type is encountered.
+        %
+        % obj = obj.LOADPATH(path, loadType);
+        %   Loads data into the object from path depending on the load type. Load
+        %   types that are supported for transientSpectra are:
+        %   'dataHolder': a .mat file containing saved data from the dataHolder
+        %       class in the forms of a dh_static and dh_array struct.
         %
         % See Also: CONVERTDH
             
-            loaded = load(myPath);   %load the path contents 
-            contents = fieldnames(loaded);   %get the variables in the loaded data
-            fileName = split(myPath,'\');
-            fileName = fileName{end};
-            switch class(loaded.(contents{1}))   %check the variable class
-                case 'struct'    %this should be a data_holder object
-                    if any(strcmp(contents,'dh_static')) && any(strcmp(contents,'dh_array')) %this is a raw data data_holder
-                        %first load with acquisition data holder
-                        [varargout{1:nargout}] = convertDH(obj,loaded.dh_static,loaded.dh_array);
-                        
-                        %update name in output objects
-                        for ii = 1:nargout
-                           varargout{ii}.name = fileName; 
-                        end
-                    else
-                        %return error
-                    end
-                case 'data_holder'
-                   %this is a data_holder object
-                   %call dh conversion routine
-                case 'FSRS'
-                   %this is a FSRS object
+            switch loadType   %check the variable class
+                case 'dataHolder'    %this should be saved dataholder object that contains structs dh_static and dh_array
+                    % Use ConvertDH to load object data from path
+                    obj = convertDH(obj,myPath);
                 otherwise
-                   %error
+                   error('Unsupported load type: %s.', loadType);
             end
         end
+
+        % Note: in unit testing this runs too slow because FSRS/TR matlab
+        % files require uncompressing the full file before checking the
+        % contents
+         function loadType = determineLoadType(obj, myPath, defaultType)
+        % DETERMINELOADTYPE returns an object-specific type string that informs the
+        % loadPath method on which load type to execute. If a file is given without
+        % its extention (.mat or .bin files), this method will attempt to determine
+        % its extention. If the load type cannot be determined, this method returns
+        % the file extention.
+        %
+        % Override this method to return subclass-specific load types. This method
+        % works best when its superclass call is done first and the subclass call
+        % contains parsing code for load types not handled in the superclass call.
+        %
+        % The TRANSIENTSPECTRA call of DETERIMNELOADTYPES supports the following
+        % load types:
+        %   'dataHolder': a *.mat file with dh_array and dh_static structs
+        %   'tsObj': a *.mat file with that contains a transientSpectra object
+            
+            % Determine file extention
+            [~,~,fileExt] = fileparts(myPath);
+
+            % For .mat files (or files without extention, which can also be .mat files when using load)
+            if strcmp(fileExt,'.mat') || isempty(fileExt)
+                mVars = whos('-file',myPath); % Get attributes for variables saved in file
+
+                % Check that variables exist
+                if isempty(mVars) %The file does not exist or is not a .mat file
+                    loadType = fileExt;
+                else %The file exists and has variables inside it
+                    if any(strcmp({mVars.name},'dh_static')) && any(strcmp({mVars.name},'dh_array'))
+                        loadType = 'dataHolder';
+                    else
+                        loadType = '.mat';
+                    end
+                end 
+            else
+                loadType = fileExt;
+            end
+         end
         
         % CONVERTDH converts a data holder into a transientSpectra. 
         % See convertDH.m for generic implementation. Override this method in 
         % subclasses for specific implementation.
         obj = convertDH(obj, dh_static, dh_array);
+        
+        function [obj,unitRules] = assignUnits(obj)
+        % ASSIGNUNITS assigns units to relevant numeric member data in the specific
+        % class. Override this method in subclasses to assign additional units.
+        % The recommended use is to call the superclass method in the subclass before 
+        % assigning additional units. Assign additional units by adding units to the 
+        % output struct, unitRules, and calling the doubleWithUnits constructor.
+        %
+        % obj = obj.assignUnits()
+        %   Protected method designed for override that assigns units in the
+        %   constructor call.
+        %
+        % [obj, unitRules] = obj.assignUnits()
+        %   Additionaly returns a structure with the unit rules
+        %
+        % See Also: DOUBLEWITHUNITS
+        
+            %define unit rules for spectra, delays, and wavelengths for the transientSpectra class
+            %spectra
+            spectraRules = doubleWithUnits([],'OD','\DeltaAbs. (OD)');
+            spectraRules = spectraRules.addRule('mOD','\DeltaAbs. (mOD)',@(f) 1e3*f, @(f) 1e-3*f);
+
+            %delays
+            delayRules = doubleWithUnits([],'ps','Delay (ps)');
+            delayRules = delayRules.addRule('fs','Delay (fs)',@(f) 1e3*f, @(f) 1e-3*f);
+            delayRules = delayRules.addRule('ns','Delay (ns)',@(f) 1e-3*f, @(f) 1e3*f);
+            delayRules = delayRules.addRule('us','Delay (\ms)',@(f) 1e-6*f, @(f) 1e6*f);
+
+            %wavelengths
+            wlRules = doubleWithUnits([],'nm','Wavelength (nm)');            
+            wlRules = wlRules.addRule('um','Wavelength (\mm)',@(f) 1e3*f, @(f) 1e-3*f);
+            wlRules = wlRules.addRule('eV','Energy (eV)',@(f) 1239.8./f, @(f) 1239.8./f);
+            wlRules = wlRules.addRule('ecm-1','Wavenumber (cm^{-1})',@(f) 1e7./f, @(f) 1e7./f);
+
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            % Assign unit rules to object data for each object array element, while keeping existing data
+            for objInd = 1:objNumel
+                obj(objInd).spectra = doubleWithUnits(obj(objInd).spectra.data,spectraRules);
+                obj(objInd).spectra_std = doubleWithUnits(obj(objInd).spectra_std.data,spectraRules);
+                obj(objInd).delays = doubleWithUnits(obj(objInd).delays.data,delayRules);
+                obj(objInd).t0 = doubleWithUnits(obj(objInd).t0.data,delayRules);
+                obj(objInd).wavelengths = doubleWithUnits(obj(objInd).wavelengths.data,wlRules); 
+            end
+            
+            %convert object array back to original size
+            obj = reshape(obj,objSize);
+            
+            %package unit rules to unitrules struct
+            unitRules = struct('spectraRules',spectraRules,'delayRules',delayRules,'wlRules',wlRules);
+        end
     end
     
     %% Protected methods (General class functionality)
@@ -1900,22 +1994,22 @@ classdef transientSpectra
         end
         
         function obj = correctT0(obj, varargin)
-% CORRECTT0 adjusts the delay values according to t0 fit information stored
-% in the object member data. If the t0 fit has not been performed, this
-% method will call findT0 with it's default options. If multiple t0s
-% are available for any object, this method will by default correct the
-% delays with the average t0.
-%
-% todo: add logic that keeps track of whether t0 has been corrected or not
-%
-% obj = obj.CORRECTT0()
-%   Corrects the delays by an average t0 for each element of obj.
-% 
-% obj = obj.CORRECTT0('average', false)
-%   Corrects the delays by a t0 amount specific to the grating position and
-%   repeat, for each element of obj.
-%
-% See Also: FINDT0
+        % CORRECTT0 adjusts the delay values according to t0 fit information stored
+        % in the object member data. If the t0 fit has not been performed, this
+        % method will call findT0 with it's default options. If multiple t0s
+        % are available for any object, this method will by default correct the
+        % delays with the average t0.
+        %
+        % todo: add logic that keeps track of whether t0 has been corrected or not
+        %
+        % obj = obj.CORRECTT0()
+        %   Corrects the delays by an average t0 for each element of obj.
+        % 
+        % obj = obj.CORRECTT0('average', false)
+        %   Corrects the delays by a t0 amount specific to the grating position and
+        %   repeat, for each element of obj.
+        %
+        % See Also: FINDT0
             
             % Format object array dims into a column for easy looping
             objSize = size(obj);

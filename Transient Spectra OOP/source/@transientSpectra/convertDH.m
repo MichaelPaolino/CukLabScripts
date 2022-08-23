@@ -1,17 +1,24 @@
-function obj = convertDH(obj, dh_static, dh_array)
+function obj = convertDH(obj, myPath)
 %converts a data_holder object to a FSRS object. Need to come up with some
 %strategy for managing all the different versions until a standardized file
 %format is created for live tweaking and acquisition. May use the availalbe
 %fields as a version signature for now with specific implementations for
 %different versions.
-
+    
+    % load data into matlab workspace
+    myData = load(myPath);
+    
+    % Ensure loaded data is saved dataHolder object data
+    assert(any(strcmp(fieldnames(myData),'dh_array')) && any(strcmp(fieldnames(myData),'dh_array')),...
+        'Could not parse %s.\n The file is not a valid saved dataHolder object',myPath)
+    
     %first determine whether this is a live tweaking or acquisition
     %data_holder
-    if ~isfield(dh_array,'Repeat')
+    if ~isfield(myData.dh_array,'Repeat')
         isAcquisition = false;
     else
         isAcquisition = true;
-        if ~isfield(dh_static,'SpectCalib')
+        if ~isfield(myData.dh_static,'SpectCalib')
             labelSpectCalib = 'x';
         else
             labelSpectCalib = 'SpectCalib';
@@ -19,9 +26,9 @@ function obj = convertDH(obj, dh_static, dh_array)
     end
     
     %get dh_array information
-    nArray = length(dh_array);
-    obj.sizes.nPixels = length(dh_array(1).wlc);
-    obj.sizes.nSchemes = length(dh_array(1).proc_data);
+    nArray = length(myData.dh_array);
+    obj.sizes.nPixels = length(myData.dh_array(1).wlc);
+    obj.sizes.nSchemes = length(myData.dh_array(1).proc_data);
 
     %initialize tmp variables for storing spectral information
     rpts_tmp = zeros(nArray, 1);
@@ -35,12 +42,12 @@ function obj = convertDH(obj, dh_static, dh_array)
     spectrastd_tmp = zeros(obj.sizes.nPixels, nArray, obj.sizes.nSchemes);
     
     %get indicies of field names for dh_array proc_data inside dh_array
-    dhFields = fieldnames(dh_array);
-    procDataFields = fieldnames(dh_array(1).proc_data);
+    dhFields = fieldnames(myData.dh_array);
+    procDataFields = fieldnames(myData.dh_array(1).proc_data);
     
     %convert nested double data inside struct to cell array and then to matrix
     %this is 2 order of magnitude faster than doing it in a for loop...
-    cellDHArray = struct2cell(dh_array); 
+    cellDHArray = struct2cell(myData.dh_array); 
     cellProcData = cellfun(@(s) struct2cell(s),cellDHArray(strcmp(dhFields,'proc_data'),1,:),'UniformOutput',false); 
     cellProcData = reshape(vertcat(cellProcData{:}),[],nArray,obj.sizes.nSchemes);
     
@@ -56,50 +63,6 @@ function obj = convertDH(obj, dh_static, dh_array)
     else
         rpts_tmp = 1:nArray;
     end
-    
-%     %Loop through data holder array and convert nested struct
-%     %arrays to temporary simple arrays
-%     for ii = 1:nArray
-%         
-%         if isAcquisition
-%             rpts_tmp(ii) = dh_array(ii).Repeat;
-%             gpos_tmp(ii) = dh_array(ii).Grating_Position;
-%             delays_tmp(ii) = dh_array(ii).Delay;
-%         else
-%             rpts_tmp(ii) = ii;
-%         end
-%         
-%         wlc_tmp(:,ii) = dh_array(ii).wlc;
-%         
-%         for jj = 1:obj.sizes.nSchemes
-%             spectra_tmp(:,ii,jj) = dh_array(ii).proc_data(jj).data; %[pixel, array ind, data scheme]
-%             spectrastd_tmp(:,ii,jj) = dh_array(ii).proc_data(jj).data; %[pixel, array ind, data scheme]
-%         end
-%     end
-    
-    %define unit rules for spectra, delays, and wavelengths.
-    %spectra
-    spectraRules = doubleWithUnits([],'OD','\DeltaAbs. (OD)');
-    spectraRules = spectraRules.addRule('mOD','\DeltaAbs. (mOD)',@(f) 1e3*f, @(f) 1e-3*f);
-    
-    %delays
-    delayRules = doubleWithUnits([],'ps','Delay (ps)');
-    delayRules = delayRules.addRule('fs','Delay (fs)',@(f) 1e3*f, @(f) 1e-3*f);
-    delayRules = delayRules.addRule('ns','Delay (ns)',@(f) 1e-3*f, @(f) 1e3*f);
-    delayRules = delayRules.addRule('us','Delay (\ms)',@(f) 1e-6*f, @(f) 1e6*f);
-    
-    %wavelengths
-    wlRules = doubleWithUnits([],'nm','Wavelength (nm)');            
-    wlRules = wlRules.addRule('um','Wavelength (\mm)',@(f) 1e3*f, @(f) 1e-3*f);
-    wlRules = wlRules.addRule('eV','Energy (eV)',@(f) 1239.8./f, @(f) 1239.8./f);
-    wlRules = wlRules.addRule('ecm-1','Wavenumber (cm^{-1})',@(f) 1e7./f, @(f) 1e7./f);
-    
-    % Assign unit rules to object data, starting with an empty doubleWithUnits
-    obj.spectra = doubleWithUnits([],spectraRules);
-    obj.spectra_std = doubleWithUnits([],spectraRules);
-    obj.delays = doubleWithUnits([],delayRules);
-    obj.t0 = doubleWithUnits(0,delayRules);
-    obj.wavelengths = doubleWithUnits([],wlRules);
     
     %Format repeat and grating position temporary arrays into final formats
     obj.sizes.nRpts = max(rpts_tmp);
@@ -118,18 +81,18 @@ function obj = convertDH(obj, dh_static, dh_array)
         obj.wavelengths.data = zeros(obj.sizes.nPixels, obj.sizes.nGPos);
         for ii = 1:obj.sizes.nGPos
             %assumes that the grating positions are in the same order as they were acquired
-            obj.wavelengths(:,ii) = dh_static.(labelSpectCalib)(ii).Wavelengths;   
+            obj.wavelengths(:,ii) = myData.dh_static.(labelSpectCalib)(ii).Wavelengths;   
         end
     else
-        obj.gPos = dh_static.Grating_Position;
+        obj.gPos = myData.dh_static.Grating_Position;
         obj.sizes.nGPos = length(obj.gPos);
-        obj.delays.data = dh_static.Delay;
+        obj.delays.data = myData.dh_static.Delay;
         obj.sizes.nDelays = 1;
-        obj.wavelengths.data = dh_static.Wavelengths(:);
+        obj.wavelengths.data = myData.dh_static.Wavelengths(:);
     end
 
     %get list of acquired schemes
-    obj.schemes = {dh_array(1).proc_data.dataScheme};
+    obj.schemes = {myData.dh_array(1).proc_data.dataScheme};
     obj.schemes = obj.schemes(:);
     
     %finally format raw data into final format
@@ -142,8 +105,6 @@ function obj = convertDH(obj, dh_static, dh_array)
     obj.spectra_std.data = reshape(obj.spectra_std.data, obj.sizes.nPixels, obj.sizes.nDelays, obj.sizes.nRpts, obj.sizes.nGPos, obj.sizes.nSchemes); %[pixels, delays, rpts, grating pos, schemes]
 
     %Set a default short name, long name, and description
-    obj.description = dh_static.Description;
-    
-    %Set default units
-    obj = obj.setUnits('nm','ps','mOD');
+    obj.description = myData.dh_static.Description;
+    obj.name = myPath;
 end
