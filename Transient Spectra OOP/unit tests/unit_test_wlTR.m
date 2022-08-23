@@ -1,5 +1,5 @@
 %% Load test data set
-
+myTR = wlTR('0p7_ STO 0V pH 13 unbuf 0-4ns phonon removed.mat','loadType','cListFile','shortName','0 V pH 13 fs');
 
 %% findT0 tests
 testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');

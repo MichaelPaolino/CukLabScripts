@@ -34,9 +34,8 @@ classdef wlTR < transientSpectra
         % See Also: TRANSIENTSPECTRA
         switch loadType
             case 'cListFile'
-                
-            case 'cListIndex'
-                
+                % Call the convertCList import method to convert a conditionList file to a wlTR object
+                obj = convertCList(obj,'sourceFile',myPath);
             otherwise
                 % Call superclass importData method for loading a dataholder or handle unknown loadType
                 obj = importData@transientSpectra(obj,myPath,loadType);
@@ -44,6 +43,9 @@ classdef wlTR < transientSpectra
         
         
         end
+        
+        % Converts a conditionList file to a wlTR object
+        obj = convertCList(obj,varargin)
    end
    
    % Data correction and manipulation methods
