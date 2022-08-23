@@ -28,20 +28,23 @@ classdef wlTR < transientSpectra
         %   Loads data into the object from path depending on the load type. Load
         %   types that are supported for wlTR are:
         %   'cListFile': a .mat file that corresponds to a conditionList entry
-        %   'cListIndex': a condition list index. The index will automatically load
-        %       the correct file
+        %   'cListIndex': a condition list index specified in path by:
+        %       path = '..\index'. For example, '..\Phonon Removed\1' will load the
+        %       first entry in conditionList in the ..\Phonon Removed\ path 
         %
         % See Also: TRANSIENTSPECTRA
-        switch loadType
-            case 'cListFile'
-                % Call the convertCList import method to convert a conditionList file to a wlTR object
-                obj = convertCList(obj,'sourceFile',myPath);
-            otherwise
-                % Call superclass importData method for loading a dataholder or handle unknown loadType
-                obj = importData@transientSpectra(obj,myPath,loadType);
-        end
-        
-        
+            switch loadType
+                case 'cListFile'
+                    % Call the convertCList import method to convert a conditionList file to a wlTR object
+                    obj = convertCList(obj,'file',myPath);
+                case 'cListIndex'
+                    % Call the convertCList import method to convert a conditionList index to a wlTR object
+                    [myPath,ind] = fileparts(myPath); %extract the parent 
+                    obj = convertCList(obj,'file',myPath,'index',str2double(ind));
+                otherwise
+                    % Call superclass importData method for loading a dataholder or handle unknown loadType
+                    obj = importData@transientSpectra(obj,myPath,loadType);
+            end
         end
         
         % Converts a conditionList file to a wlTR object

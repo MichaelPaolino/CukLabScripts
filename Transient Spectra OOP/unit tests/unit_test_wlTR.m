@@ -1,6 +1,17 @@
 %% Load test data set
-myTR = wlTR('0p7_ STO 0V pH 13 unbuf 0-4ns phonon removed.mat','loadType','cListFile','shortName','0 V pH 13 fs');
+% Test cListFile import
+myTR = wlTR('0V pH 13 IS 100 mM.mat','loadType','cListFile','shortName','0 V pH 13 fs');
 
+% Test cListIndex import
+% Parent path:
+compSpecific = 'C:\Users\User\Desktop\Raman Program\';
+repDir = 'CukLabScripts\Transient Spectra OOP\unit tests\sample data\TR\ConditionList\';
+
+% load one cListIndex from Avgd Combined Only folder
+myTR = wlTR(fullfile(compSpecific, repDir, 'Avgd Combined Only','44'),'loadType','cListIndex');
+
+% load two cListIndex from Phonon Removed folder
+myTR = wlTR(fullfile(compSpecific, repDir, 'Phonon Removed',{'107','108'}),'loadType','cListIndex');
 %% findT0 tests
 testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
 
