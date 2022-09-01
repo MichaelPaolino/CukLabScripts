@@ -1,7 +1,6 @@
 classdef wlTR < transientSpectra
    properties
        chirpParams = 0;
-       
        chirpCorrected = false;
    end
    
@@ -211,7 +210,6 @@ classdef wlTR < transientSpectra
                end
                
                % Loop over all unique delay axes and interpolate spectra 
-               sNearest = zeros(size(spectra));
                for gPInd = 1:obj(objInd).sizes.nGPos
                    for rptInd = 1:obj(objInd).sizes.nRpts
                        for pixelInd = 1:obj(objInd).sizes.nPixels

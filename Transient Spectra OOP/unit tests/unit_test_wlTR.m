@@ -3,23 +3,28 @@
 myTR = wlTR('0V pH 13 IS 100 mM.mat','loadType','cListFile','shortName','0 V pH 13 fs');
 
 % Test cListIndex import
-% Parent path:
-compSpecific = 'C:\Users\User\Desktop\Raman Program\';
-repDir = 'CukLabScripts\Transient Spectra OOP\unit tests\sample data\TR\ConditionList\';
+% Get conditionList file path (note fullfile returns path with
+% system-specific file seperator, i.e. linux, macOS, windows...
+cListPath = fullfile(fileparts(matlab.desktop.editor.getActiveFilename),'sample data','TR','ConditionList');
 
 % load one cListIndex from Avgd Combined Only folder
-myTR = wlTR(fullfile(compSpecific, repDir, 'Avgd Combined Only','44'),'loadType','cListIndex');
+myTR = wlTR(fullfile(cListPath, 'Avgd Combined Only','44'),'loadType','cListIndex');
 
 % load two cListIndex from Phonon Removed folder
-myTR = wlTR(fullfile(compSpecific, repDir, 'Phonon Removed',{'107','108'}),'loadType','cListIndex');
+myTR = wlTR(fullfile(cListPath, 'Phonon Removed',{'107','108'}),'loadType','cListIndex');
+
+% Test TABin import
+myTR = wlTR({'19-12-05_13h56m05s_0p04Fl_0V_pH13_100mM_630nm_cont_0-2ns_spol',...
+    '19-12-05_14h53m12s_0p04Fl_0V_pH13_100mM_460nm_cont_0-2ns_spol'},'loadType','bin');
 %% findT0 tests
-testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
 
 %flip sign
 testData.spectra.data = -testData.spectra.data;
 
 %test without stitching
 [~,t0] = testData.findT0;
+t0 = t0{1};
 assert(all(size(t0)==[1,1,2]),'Incorrect t0 size');
 assert(all(t0 > 0.5) & all(t0 < 0.7),'Could not find correct t0');
 
@@ -27,12 +32,14 @@ assert(all(t0 > 0.5) & all(t0 < 0.7),'Could not find correct t0');
 testData = testData.stitch;
 
 [~,t0] = testData.findT0;
+t0 = t0{1};
 assert(all(size(t0)==[1,1]),'Incorrect t0 size');
 assert((t0 > 0.5) & (t0 < 0.7),'Could not find correct t0');
 
 %test actual multi-d data with repeats
-testData = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','short name','pH 12');
+testData = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','shortName','pH 12');
 [~,t0] = testData.findT0;
+t0 = t0{1};
 assert(all(size(t0)==[1,4,2]),'Incorrect t0 size');
 assert(all(t0 > 0.5,'all') & all(t0 < 0.7,'all'),'Could not find correct t0');
 
@@ -40,11 +47,12 @@ assert(all(t0 > 0.5,'all') & all(t0 < 0.7,'all'),'Could not find correct t0');
 testData = testData.average;
 testData = testData.stitch;
 [~,t0] = testData.findT0;
+t0 = t0{1};
 assert(all(size(t0)==[1,1]),'Incorrect t0 size');
 assert((t0 > 0.5) && (t0 < 0.7),'Could not find correct t0');
 
 %% correctT0 tests
-testData = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','short name','chirp');
+testData = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','shortName','chirp');
 testData = testData.trim('delays',[-2,2]);
 
 figure;
@@ -57,7 +65,7 @@ hold off;
 
 assert(all(size(testData.t0.data)==[1,4,2]),'Incorrect obj.t0 size');
 
-testData = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','short name','chirp');
+testData = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','shortName','chirp');
 testData = testData.trim('delays',[-2,2]);
 
 figure;
@@ -70,6 +78,23 @@ hold off;
 
 assert(all(size(testData.t0.data)==[1,1]),'Incorrect obj.t0 size');
 
+%% Find and correct t0 with non-default params
+testData = transientSpectra('22-06-29_12h07m46s_Sample_V_pH_1210mMNa');
+% Cosmetic pre-processing
+% size: [pixels, delays, rpts, grating pos, schemes]
+pruneLogical = false(size(testData.spectra.data));
+pruneLogical(:,:,[2,3,4],1,:) = true;
+pruneLogical(:,:,3,2,:) = true;
+testData = testData.prune(~pruneLogical);
+
+testData = testData.stitch;
+testData = testData.average;
+
+[testData, t0] = testData.findT0('tRange',[-5000 10000]);
+testData = testData.correctT0;
+
+figure; testData.plotKinetics('wavelengths',560);
+xlim([-5e3 10e3]);
 %% fit chirp tests
 testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
 

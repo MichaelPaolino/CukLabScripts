@@ -988,8 +988,9 @@ classdef transientSpectra
             p.addOptional('ax',gca,@(ax)isa(ax,'matlab.graphics.axis.Axes'));
             
             %default values for flags
-            plotFlag = struct('average',true,...
-                               'legend',true);
+            plotFlag = struct('average',true,... %add an option to average data before plotting
+                               'legend',true,... %add an option to display the legend
+                               'index',false);   %add an option to display the index on the x-axis
             
             %add plotFlag fields in loop so that partial matching can be used
             paramNames = fieldnames(plotFlag);
@@ -1000,8 +1001,7 @@ classdef transientSpectra
             %add delay list with all delays (empty array) as default value
             p.addParameter('wavelengths',[], @(d) isa(d,'double') && isvector(d));
             
-            %add an option to display the index on the x-axis
-            p.addParameter('index',false, @(l) islogical(l));
+
             
             %User may also specify a linespec argument. inputParser is not
             %smart enough to parse linespec, therefore remove and parse
@@ -1921,31 +1921,66 @@ classdef transientSpectra
         %   a baseline, b is the signal amplitude, and s is the standard deviation
         %   rise-time (defined by the pump-probe convolution).
         %
+        % obj = obj.FINDT0(varargin)
+        %   Finds the t0 for the dataset with optional name-value pairs:
+        %   'tRange': (2 element numeric vector) the delay range to fit for t0. The
+        %       default value is either  +/-min(t) if t is negative or t:10*minStep
+        %       if t is positive and where minStep is the smallest delay step in 
+        %       the data.
+        %   'wlAr': (numeric vector) wavelengths at which to perform the t0 fit. 
+        %       The default is the center-most wavelength in the data.
+        %   'fitFun': (function handle) A custom function handle to fit the t0 with
+        %       of the form: t0 = f(x,y). The default is the third element of 
+        %       lsqFitSigmoid.
+        %
+        % [obj, t0Array] = obj.FINDT0(__)
+        %   Additionally returns the t0 fit data in a cell array where the array
+        %   size is the size of obj and each element of the cell array has a size
+        %   of [numel(wlAr),nRpts,nGPos].
+        %
         % See Also: LSQFITSIGMOID, LSQNONLIN
             
             % Format object array dims into a column for easy looping
             objSize = size(obj);
             objNumel = numel(obj);
             obj = obj(:);
-            t0Arr = cell(objNumel,1);
+            t0Arr = cell(objNumel,1);           
             
-            % Format varargin and set default values
-            tRange = [-2 2];
-            wlAr = [];
-            defaultWlAr = true;
+            % Format varargin using input parser
+            p = inputParser;
+            p.FunctionName = 'findT0';
+            p.addParameter('tRange', [], @(p) (isnumeric(p) && numel(p)==2) || isempty(p));
+            p.addParameter('wlAr', [], @(p) (isvector(p) && isnumeric(p)) || isempty(p));
+            p.addParameter('fitFun',@(x,y) sum(lsqFitSigmoid(x, y).*[0,0,1,0]), @(p) isa(p,'function_handle'));
+           
+            % Parse arguemnts, results will be in p.Results
+            p.parse(varargin{:});
+            results = p.Results;
             
             % Loop over individual object elements
             for objInd = 1:objNumel
-                
-               if defaultWlAr
+               
+               % Default wlAr is the center-most wavelength
+               if isempty(p.Results.wlAr)
                    minWl = min(obj(objInd).wavelengths.data,[],'all');
                    maxWl = max(obj(objInd).wavelengths.data,[],'all');
-                   wlAr = 0.5*(minWl + maxWl);
+                   results.wlAr = 0.5*(minWl + maxWl);
                end
-                   
+               
+               % Default tRange is:
+               if isempty(p.Results.tRange)
+                   minDelay = min(obj(objInd).delays.data,[],'all','omitnan');
+                   if minDelay < 0  %-min delay to + min delay if min delay is negative
+                      results.tRange = [minDelay, abs(minDelay)]; 
+                   else %min delay to 10x the minimum step away from the min delay if not negative
+                      minDelayStep = min(abs(diff(obj(objInd).delays.data,1,1)),[],'all','omitnan');
+                      results.tRange = minDelay + [0, 10*minDelayStep];
+                   end
+               end
+               
                % Subset and trim the object to the desired wavelength and delay range
-               tmpObj = obj(objInd).subset('wavelengths',wlAr);
-               tmpObj = tmpObj.trim('delays',tRange);
+               tmpObj = obj(objInd).subset('wavelengths',results.wlAr);
+               tmpObj = tmpObj.trim('delays',results.tRange);
                
                %convert object into double array
                t = tmpObj.delays.data;
@@ -1968,10 +2003,10 @@ classdef transientSpectra
                %loop over extra dims and fit 
                t0Tmp = zeros(1,nExtraDim);             
                for ii = 1:nExtraDim
-                   %run lsqFitSigmoid, which fits data to y = a+b*0.5*(1+erf(sqrt(0.5)*(x-x0)/s));
-                   %and returns fp as [a, b, x0, s]
-                   fp = lsqFitSigmoid(t(:,ii), spectData(:,ii));
-                   t0Tmp(1,ii) = fp(3);
+                   % Runs the fit function. By default this is lsqFitSigmoid, 
+                   % which fits data to y = a+b*0.5*(1+erf(sqrt(0.5)*(x-x0)/s));
+                   % and returns the third element of fp, [a, b, x0, s]
+                   t0Tmp(1,ii) = results.fitFun(t(:,ii),spectData(:,ii));
                end
                
                %convert t0 dims
@@ -1985,12 +2020,6 @@ classdef transientSpectra
             % convert object array back to original size
             obj = reshape(obj,objSize);
             t0Arr = reshape(t0Arr,objSize);
-            
-            % if there is only one object, return a double array instead of
-            % a cell array
-            if objNumel == 1
-               t0Arr = t0Arr{1}; 
-            end
         end
         
         function obj = correctT0(obj, varargin)
@@ -2045,10 +2074,11 @@ classdef transientSpectra
                     % update all delays with implicit array dim expansion for t0
                     obj(objInd).delays.data = obj(objInd).delays.data - obj(objInd).t0.data;
                 end
+                
             end
             
             % update object state to t0 has been corrected
-            obj.flags.t0Corr = true;
+            % obj.flags.t0Corr = true;
             
             % convert object array back to original size
             obj = reshape(obj,objSize);
