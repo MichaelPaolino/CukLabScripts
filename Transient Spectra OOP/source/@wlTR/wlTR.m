@@ -33,6 +33,7 @@ classdef wlTR < transientSpectra
         %       first entry in conditionList in the ..\Phonon Removed\ path 
         %
         % See Also: TRANSIENTSPECTRA
+        
             switch loadType
                 case 'cListFile'
                     % Call the convertCList import method to convert a conditionList file to a wlTR object
@@ -41,6 +42,9 @@ classdef wlTR < transientSpectra
                     % Call the convertCList import method to convert a conditionList index to a wlTR object
                     [myPath,ind] = fileparts(myPath); %extract the parent 
                     obj = convertCList(obj,'file',myPath,'index',str2double(ind));
+                case 'bin'
+                    % Call convertTABin importmethod to load and convert a TA bin file into a wlTR object
+                    obj = convertTABin(obj,myPath);
                 otherwise
                     % Call superclass importData method for loading a dataholder or handle unknown loadType
                     obj = importData@transientSpectra(obj,myPath,loadType);

@@ -70,6 +70,7 @@ function obj = convertCList(obj,varargin)
                        'nDelays', size(obj.spectra.data,2), ...
                        'nPixels', size(obj.spectra.data,1));
     
+    % Update object name and shortName
     [~,fileName] = fileparts(filePath);
     obj.name = filePath;
     obj.shortName = fileName;
