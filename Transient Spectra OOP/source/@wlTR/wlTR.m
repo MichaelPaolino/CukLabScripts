@@ -8,6 +8,53 @@ classdef wlTR < transientSpectra
        TRflag = struct('chirpFit',false);     
    end
    
+   % Constructor method
+   methods
+       function obj = wlTR(varargin)
+        % A WLTR object contains white-light transient reflectance-specific 
+        % funtionality in addition to everything inside the transientSpectra class.
+        % The main additional features are related to chirp correction and loading 
+        % legacy TA binary and conditionList data.
+        % 
+        % obj = wlTR(__);
+        %   Constructs a wlTR object with the same arguments as the transientSpectra
+        %   constructor call.
+        %
+        % obj = wlTR(__, 'loadType', lType);
+        %   Constructs a wlTR object with data imported from a file using the
+        %   import method specified with the 'loadType' name-value pair. lType is a
+        %   char array or cell of char arrays. Allowed values are:
+        %       'dataHolder': loads a data holder .mat file created by the LabVIEW 
+        %           MATLAB API using the new acquisition program
+        %       'bin': loads a legacy TA binary file acquired by the old
+        %           acquisition program
+        %       'cListFile': loads a .mat file that is part of the legacy
+        %           conditionList database
+        %       'cListIndex': loads a file specified by conditionList index, where
+        %           conditionList is a cell array inside dataList.mat. When using
+        %           this loadType, the file path should navigate to the directory
+        %           containing the dataList.mat file. Instead of specifying a .mat
+        %           file, specify the index inside the conditionList cell array. 
+        %           For example: 
+        %            obj = wlTR('..\Phonon Removed\5','loadType','cListIndex'); 
+        %           will load the data for the 5th entry in the phonon removed
+        %           conditionList. Note that this loadType only works with full
+        %           paths, so the .. in the example will have to be replaced with
+        %           the full path for the phonon removed folder.
+        %       
+        % WLTR has the same units as transientSpectra.
+        %
+        % The default units for a wlTR object are mOD, ps, and nm
+        %
+        % See also: TRANSIENTSPECTRA, DOUBLEWITHUNITS
+           
+           % Currently, wlTR does not define additional constructor
+           % functionality. Call the transientspectra superclass
+           % constructor directly.
+           obj@transientSpectra(varargin);
+       end
+   end
+   
    % Methods that define the inner workings of the class
    methods (Access = 'protected')
         function obj = importData(obj,myPath,loadType)
@@ -68,7 +115,7 @@ classdef wlTR < transientSpectra
         %
         % See Also: fitChirp, correctChirp, polyval
            
-           % Use has an option to load chirp parameters from a .mat file
+           % User has an option to load chirp parameters from a .mat file
            if ischar(chirpFit)
               tmp = load(chirpFit);
               chirpFit = tmp.chirpFit;

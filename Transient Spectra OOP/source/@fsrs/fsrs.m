@@ -12,11 +12,11 @@ classdef fsrs < transientSpectra
         % is defining a raman pump wavelength and the raman pump unit, along with 
         % supporting methods to automate processing.
         % 
-        % obj = fsrs(...);
+        % obj = fsrs(__);
         %   Constructs a fsrs object with the same arguments as the transientSpectra
         %   constructor call.
         %
-        % obj = fsrs(..., 'ramanPumpNm', nmVal);
+        % obj = fsrs(__, 'ramanPumpNm', nmVal);
         %   Constructs a fsrs object and additionally assigns the ramanPumpNm
         %   value. The default value is 400 nm.
         %

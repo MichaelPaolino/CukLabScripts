@@ -62,14 +62,18 @@ classdef transientSpectra
         % obj = TRANSIENTSPECTRA(obj);
         %	Converts a child object obj to the TRANSIENTSPECTRA class.
         %
-        % obj = TRANSIENTSPECTRA(..., varargin)
+        % obj = TRANSIENTSPECTRA(__, varargin)
         %	Constructs a TRANSIENTSPECTRA object with additional options specified
         %	by varargin. varargin is a comma sperated list of keywords and/or
         %	name-value pairs. 
         %
         % Name-Value pairs:
-        %   'short name' (char or cell of char) set the object's short name
-        %
+        %   'shortName' (char or cell of char) set the object's short name
+        %   'loadType' (char or cell of char) set the method for importing data.
+        %       The default loadType method is 'dataHolder'. Implpemented methods 
+        %       for the transientSpectra class are:
+        %           'dataHolder': import .mat files saved by the LabVIEW MATLAB API
+        %   
         % TRANSIENTSPECTRA units are:
         %   Spectra: 
         %       (OD): Log-scale optical density for absorption
