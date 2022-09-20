@@ -51,7 +51,7 @@ classdef wlTR < transientSpectra
            % Currently, wlTR does not define additional constructor
            % functionality. Call the transientspectra superclass
            % constructor directly.
-           obj@transientSpectra(varargin);
+           obj@transientSpectra(varargin{:});
        end
    end
    
