@@ -149,7 +149,11 @@ classdef transientSpectra
                end
                
                % Assign units to relevant numeric data. This method can be overriden in a subclass
-               obj = obj.assignUnits();
+               % Note: assignUnits does not support object array functionality because different 
+               % object array elements may have different unit assignments.
+               for objInd = 1:argNumel
+                   obj(objInd) = obj(objInd).assignUnits();
+               end
                
                %Set default units
                obj = obj.setUnits('nm','ps','mOD');
@@ -612,6 +616,8 @@ classdef transientSpectra
         % The recommended use is to call the superclass method in the subclass before 
         % assigning additional units. Assign additional units by adding units to the 
         % output struct, unitRules, and calling the doubleWithUnits constructor.
+        % Note: This method does not support object array functionality
+        % because different objects may have different unit assignments.
         %
         % obj = obj.assignUnits()
         %   Protected method designed for override that assigns units in the
@@ -638,23 +644,13 @@ classdef transientSpectra
             wlRules = wlRules.addRule('um','Wavelength (\mm)',@(f) 1e3*f, @(f) 1e-3*f);
             wlRules = wlRules.addRule('eV','Energy (eV)',@(f) 1239.8./f, @(f) 1239.8./f);
             wlRules = wlRules.addRule('ecm-1','Wavenumber (cm^{-1})',@(f) 1e7./f, @(f) 1e7./f);
-
-            % Format object array dims into a column for easy looping
-            objSize = size(obj);
-            objNumel = numel(obj);
-            obj = obj(:);
             
             % Assign unit rules to object data for each object array element, while keeping existing data
-            for objInd = 1:objNumel
-                obj(objInd).spectra = doubleWithUnits(obj(objInd).spectra.data,spectraRules);
-                obj(objInd).spectra_std = doubleWithUnits(obj(objInd).spectra_std.data,spectraRules);
-                obj(objInd).delays = doubleWithUnits(obj(objInd).delays.data,delayRules);
-                obj(objInd).t0 = doubleWithUnits(obj(objInd).t0.data,delayRules);
-                obj(objInd).wavelengths = doubleWithUnits(obj(objInd).wavelengths.data,wlRules); 
-            end
-            
-            %convert object array back to original size
-            obj = reshape(obj,objSize);
+            obj.spectra = doubleWithUnits(obj.spectra.data,spectraRules);
+            obj.spectra_std = doubleWithUnits(obj.spectra_std.data,spectraRules);
+            obj.delays = doubleWithUnits(obj.delays.data,delayRules);
+            obj.t0 = doubleWithUnits(obj.t0.data,delayRules);
+            obj.wavelengths = doubleWithUnits(obj.wavelengths.data,wlRules); 
             
             %package unit rules to unitrules struct
             unitRules = struct('spectraRules',spectraRules,'delayRules',delayRules,'wlRules',wlRules);

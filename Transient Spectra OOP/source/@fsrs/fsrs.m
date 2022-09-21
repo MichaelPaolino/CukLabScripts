@@ -159,6 +159,8 @@ classdef fsrs < transientSpectra
         function [obj,unitRules] = assignUnits(obj)
         % for FSRS class calls parent class TRANSIENTSPECTRA ASSIGNUNITS 
         % and assigns FSRS specific units to the spectra and wavelengths.
+        % Note: This method does not support object array functionality
+        % because different objects may have different unit assignments.
         %
         % FSRS specific units are:
         %   Spectra: (%Gain) Raman gain in % or (ppmGain) in ppm
@@ -181,20 +183,9 @@ classdef fsrs < transientSpectra
                 @(f) 1e7*(1/obj.ramanPumpNm-1./f),...
                 @(f) 1./(1/obj.ramanPumpNm-1e-7*f));
             
-            % Format object array dims into a column for easy looping
-            objSize = size(obj);
-            objNumel = numel(obj);
-            obj = obj(:);
-            
-            % Assign unit rules to object data for each object array element, while keeping existing data
-            for objInd = 1:objNumel
-                obj(objInd).spectra = doubleWithUnits(real(obj(objInd).spectra.data),spectraRules);
-                obj(objInd).spectra_std = doubleWithUnits(real(obj(objInd).spectra_std.data),spectraRules);
-                obj(objInd).wavelengths = doubleWithUnits(real(obj(objInd).wavelengths.data),wlRules); 
-            end
-            
-            %convert object array back to original size
-            obj = reshape(obj,objSize);
+            obj.spectra = doubleWithUnits(real(obj.spectra.data),spectraRules);
+            obj.spectra_std = doubleWithUnits(real(obj.spectra_std.data),spectraRules);
+            obj.wavelengths = doubleWithUnits(real(obj.wavelengths.data),wlRules); 
             
             %package unit rules to unitrules struct
             unitRules = struct('spectraRules',spectraRules,'delayRules',unitRules.delayRules,'wlRules',wlRules);
