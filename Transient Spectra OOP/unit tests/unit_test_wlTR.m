@@ -96,23 +96,22 @@ testData = testData.correctT0;
 figure; testData.plotKinetics('wavelengths',560);
 xlim([-5e3 10e3]);
 %% fit chirp tests
-testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
 
 testData = testData.stitch();
 testData = testData.subset('wavelengths',375:5:725);
 
 [testData, chirpParam] = testData.fitChirp();
 
-testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
 
 [testData, chirpParam] = testData.fitChirp('order',7,'wavelengths',365:5:735,'delays',[-3,3]);
 
 %% correct chirp tests
-testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
 
 testData = testData.fitChirp('order',7,'wavelengths',365:5:735,'delays',[-3,3]);
 
-%%
 % Test chirp correction with multi-d data set
 testData2 = testData.correctChirp();
 testData2 = testData2.average();
@@ -136,13 +135,13 @@ figure;
 contourf(testData3.wavelengths.data, testData3.delays.data, testData3.spectra.data');
 %% Generate test data for CC chirp correction
 % Test different interpolation and extrapolation strategies
-testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
 testData = testData.fitChirp('order',7,'wavelengths',365:5:735,'delays',[-3,3]);
 
-testData2 = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','short name','chirp');
+testData2 = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','shortName','chirp');
 testData2 = testData2.trim('delays',[-3,3]);
 testData2.chirpParams = testData.chirpParams;
-%% Test different interpolation and extrapolation strategies
+%% Test different interpolation and extrapolation strategies for chirp correction
 testData3 = testData2.correctChirp('interp','spline');
 testData3 = testData2.correctChirp('extrap','extrap');
 testData3 = testData2.correctChirp('extrap',0);
@@ -154,14 +153,58 @@ figure;
 contour(testData3.wavelengths.data, testData3.delays.data, -testData3.spectra.data',[-3:0.1:2]);
 
 %% Set chirp parameters using setChirp
-testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','short name','chirp');
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
 testData = testData.fitChirp('order',7,'wavelengths',365:5:735,'delays',[-3,3]);
 
 % chirp param from vector
-testData2 = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','short name','chirp');
+testData2 = wlTR('22-07-22_20h36m26s_Sample_W_pH_12100mMNa.mat','shortName','chirp');
 testData2 = testData2.setChirp(testData.chirpParams);
 assert(all(testData2.chirpParams == testData.chirpParams),'Failed to set chirp params.');
 
 % chirp param from file
 testData2 = testData2.setChirp('chirpFitParam20Dec01.mat');
 assert(length(testData2.chirpParams)==8,'Failed to set chirp params.');
+
+%% Test interpolation with non-chirp corrected data
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
+
+% 1d interpolation along wavelengths
+testData2 = testData.interp('wavelengths',375:5:700);
+figure;
+testData2.plotSpectra('delays',[-2,0,2]);
+
+% 1d interpolation along delays
+testData2 = testData.interp('delays',-5:0.05:5);
+figure;
+testData2.plotKinetics('wavelengths',[400,500,600]);
+
+% 1d interpolation with pruned data along delays (NaN Flags)
+pruneLogical = false(size(testData.spectra.data));
+pruneLogical(:,[5,10,35:40],1,1) = true;
+testData2 = testData.prune(pruneLogical);
+testData3 = testData2.interp('delays',-5:0.05:5);
+figure;
+testData3.plotKinetics('wavelengths',[400,500,600]);
+
+% this plot should preserve the NaN values
+testData3 = testData2.interp('wavelengths',[400,500,600]);
+figure;
+testData3.plotKinetics('wavelengths',[400,500,600]);
+
+% 2d interpolation along wavelengths and delays
+testData2 = testData.stitch();
+testData2 = testData2.average();
+testData2 = testData2.interp('delays',-2.5:0.05:3.5,'wavelengths',375:5:700);
+figure;
+contourf(testData2.wavelengths.data, testData2.delays.data, testData2.spectra.data');
+
+% 2d interpolation with sparse NaN values
+testData2 = testData.stitch();
+testData2 = testData2.average();
+testData2 = testData2.setChirp('chirpFitParam20Dec01.mat');
+testData2 = testData2.correctChirp();
+testData2 = testData2.interp('delays',-2.5:0.05:3.5,'wavelengths',375:5:700);
+figure;
+contourf(testData2.wavelengths.data, testData2.delays.data, testData2.spectra.data');
+
+

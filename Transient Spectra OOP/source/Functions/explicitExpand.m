@@ -19,9 +19,8 @@ function arrayOut = explicitExpand(arrayIn, arraySize)
 % See Also: SIZE, REPMAT, RESHAPE, PERMUTE
 
 % Get the size vector of arrayIn, padded with singleton dims to match the length of arraySize
-tmpSize = size(arrayIn);
-inSize = ones(numel(arraySize),1);
-inSize(1:numel(tmpSize)) = tmpSize;
+arraySize = arraySize(:);
+inSize = sizePadded(arrayIn,1:numel(arraySize));
 
 % ensure that inSize matches arraySize, except for singleton dims
 assert(all(or(inSize(:) == arraySize(:),inSize(:) == 1)),'Non-singleton array dims of arrayIn must match arraySize.');

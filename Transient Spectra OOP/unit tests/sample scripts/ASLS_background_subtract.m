@@ -62,7 +62,7 @@ myFSRS.plotSpectra()
 fsrsBLind = myFSRS(:); %This will hold unnomalized baseline-corrected data
 fsrsBLindNmd = fsrsBLind; %This will hold normalized baseline-corrected data
 
-for objInd = 1:numel(fsrsBLined)
+for objInd = 1:numel(fsrsBLind)
    % manually extract data from fsrs object for custom processing
    y = fsrsBLind(objInd).spectra.data(:); % sample spectra
    k = ones(size(y)); % 'background' spectra--ones because we don't know what the true background is

@@ -1668,120 +1668,186 @@ classdef transientSpectra
         end
         
         function obj = interp(obj, varargin)
-        %NOT YET IMPLEMENTED
-            %define default values
-            interpVals = struct('wls','all',...
-                          'delays','all');
+% INTERP interpolates spectral data on user specified axes. This method
+% wraps MATLAB's interp2 function. Use name-value pairs to specify axes to
+% interpolate, followed by the interpolation values.
+
+            p = inputParser();
+            p.addParameter('wavelengths',[]);
+            p.addParameter('delays',[]);
+            p.addParameter('method','linear');
+            p.addParameter('extrapval',NaN);
             
-            %parse varargin
-            if nargin > 1
-                for ii = 1:2:(nargin-1)
-                    assert(ischar(varargin{ii}),...
-                        ['Invalid argument class for name-value pair. Expected class char for name, got ' class(varargin{ii}) '.']);
-                    switch varargin{ii}
-                        case 'wavelengths'
-                            interpVals.wls = varargin{ii+1};
-                        case 'delays'
-                            interpVals.delays = varargin{ii+1};
-                        otherwise
-                            error([varargin{ii} ' is not a valid argument name.']); 
+            p.parse(varargin{:});
+            
+            lNewSub = p.Results.wavelengths;
+            tNewSub = p.Results.delays;
+            
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            % Loop over object elements
+            for objInd = 1:objNumel
+                % Extract data for numerical processing
+                s = obj(objInd).spectra.data;
+                t = obj(objInd).delays.data;
+                l = obj(objInd).wavelengths.data;
+                
+                % Convert array sizes of t and l to match the size of s for easy vectorization
+                % s old: [pixels, delays, rpts, g pos, schemes]
+                % s new: [pixels, delays, rpts x g pos x schemes]
+                % t old: [delays, rpts, g pos]
+                % t new: [delays, rpts x g pos x schemes]
+                % l old: [pixels, g pos]
+                % l new: [pixels, rpts x g pos x schemes]
+                t = reshape(explicitExpand(t,sizePadded(s,[2:5])),obj(objInd).sizes.nDelays,[]);
+                l = reshape(explicitExpand(permute(l,[1,3,2]),sizePadded(s,[1 3:5])),obj(objInd).sizes.nPixels,[]);
+                s = reshape(s,obj(objInd).sizes.nPixels,obj(objInd).sizes.nDelays,[]);
+                
+                % Define new sizes for outputs, which will depend on what is being interpolated
+                % Number of new wavelength elements
+                if isempty(p.Results.wavelengths)
+                    lsz = size(l,1);
+                else
+                    lsz = length(lNewSub);
+                end
+                
+                % Number of new delay elements
+                if isempty(p.Results.delays)
+                    tsz = size(t,1);
+                else
+                    tsz = length(tNewSub);
+                end
+                
+                % The number of extra dim array elements
+                nExtra = size(s,3);
+                
+                % For efficient vectorization, initialize output arrays
+                lNew = zeros(lsz,nExtra);
+                tNew = zeros(tsz,nExtra);
+                sNew = zeros(lsz,tsz,nExtra);
+                
+                % Loop over the extra dims
+                for ii = 1:nExtra
+                    % Handle no interpolation along one of the dims
+                    if isempty(p.Results.wavelengths)
+                        lNewSub = l(:,ii);
                     end
-                end
-            end
-                      
-            %interp wavelengths
-            if ischar(interpVals.wls) && ischar(interpVals.delays)  %this is a do nothing case
-                % Assert correct input to ensure user isn't accidently doing something they're not aware of
-                assert(strcmp(interpVals.wls,'all') && strcmp(interpVals.delays,'all'),...
-                    'Expected all keyword or wavelength array of type double.');
-                
-            elseif isa(interpVals.wls,'double') && ischar(interpVals.delays)   %this does the wavelength trim       
-                %ensure the user has correct input before trimming
-                assert(isvector(interpVals.wls),'Wavelengths must be a vector');
-                
-                %load wavelengths
-                wls = obj.wavelengths.data; %[wls, gpos]
-                
-                %ensure wavelengths are in increasing order and within the 
-                %available wavelength range. For now, extrapolation is not allowed
-                interpVals.wls = sort(interpVals.wls);
-                interpVals.wls = interpVals.wls(and(interpVals.wls>min(wls(:)),interpVals.wls<max(wls(:))));
-                nInterpWls = length(interpVals.wls);
-                
-                %for easy looping, do the following dim rearrangement:
-                %[pixels, delays, rpts, gpos, schemes] -> [pixels, delays x rpts x schemes, gpos]
-                tmpSpectra = permute(obj.spectra.data,[1,2,3,5,4]);
-                tmpSpectra = reshape(tmpSpectra,obj.sizes.nPixels,[],obj.sizes.nGPos);
-                
-                %Allocate NaN double arrays and place spectra values into it 
-                interpSpectra = zeros([nInterpWls,size(tmpSpectra,2),obj.sizes.nGPos]); %[interp pixels, delays x rpts x schemes, gpos]
-                interpWls = nan([nInterpWls,obj.sizes.nGPos]); %[interp pixels, gpos]
-               
-                %loop over grating positions to sub-select range dicated by wlInd
-                for ii = 1:obj.sizes.nGPos
-                    %Interpolate for each grating position, which will have different wavelengths
-                    isWlNaN = isnan(wls(:,ii)); %flag wavelengths that are NaN. interp1 requires numeric input (no NaN)
-                    interpSpectra(:,:,ii) = interp1(wls(~isWlNaN,ii),tmpSpectra(~isWlNaN,:,ii),interpVals.wls);
                     
-                    %Find values that were not set to NaN for extrapolation
-                    isInterpWlNaN = all(isnan(interpSpectra(:,:,ii)),2);
-                    interpWlsNoNaN = interpVals.wls(~isInterpWlNaN);
+                    if isempty(p.Results.delays)
+                        tNewSub = t(:,ii);
+                    end
                     
-                    %copy desired subrange for each grating position into the NaN arrays starting from index 1
-                    interpWls(1:length(interpWlsNoNaN),ii) = interpWlsNoNaN;
-                    interpSpectra(1:length(interpWlsNoNaN),:,ii) = interpSpectra(~isInterpWlNaN,:,ii);
+%                     % Remove any NaN values in the data array that occupy a whole delay or pixel
+%                     % such rows or cols are used as a flag to drop delays and pixels. 
+%                     % Any sparse NaN values will be perserved as NaN.
+%                     nanFlag = isnan(s(:,:,ii));
+%                     nanL = all(nanFlag,2); % the wavelength should be excluded if all delay values are NaN
+%                     nanT = all(nanFlag,1); % the delay should be excluded if all wavelength values are NaN
+%                     
+%                     % Take the data index subset that is non NaN
+%                     sTmp = s(~nanL,~nanT,ii);
+%                     tTmp = t(~nanT,ii);
+%                     lTmp = l(~nanL,ii);
+
+                    % For now, ignore filling NaN values. The correctness
+                    % of such a data processing method is questionable...
+                    sTmp = s(:,:,ii);
+                    tTmp = t(:,ii);
+                    lTmp = l(:,ii);
+                    
+                    % In addition, MATLAB's interp requires that data points are sorted
+                    [tTmp, tTmpI] = sort(tTmp);
+                    [lTmp, lTmpI] = sort(lTmp);
+                    sTmp = sTmp(lTmpI,tTmpI);
+                    
+                    % sort the new values as well
+                    [lNewSub, lNewI] = sort(lNewSub(:));
+                    [tNewSub, tNewI] = sort(tNewSub(:));
+                    
+                    % Determine which version of interp to call depending on the dimentionality of the data
+                    if numel(tTmp) == 1  % Use 1D interpolation on wavelengths
+                        if isnan(p.Results.extrapval)
+                            sIntrp = interp1(lTmp, sTmp, lNewSub, p.Results.method);
+                        else
+                            sIntrp = interp1(lTmp, sTmp, lNewSub, p.Results.method, p.Results.extrapval);
+                        end
+                    elseif numel(lTmp) == 1 % Use 1D interpolation on delays
+                        if isnan(p.Results.extrapval)
+                            sIntrp = interp1(tTmp, sTmp, tNewSub, p.Results.method);
+                        else
+                            sIntrp = interp1(tTmp, sTmp, tNewSub, p.Results.method, p.Results.extrapval);
+                        end    
+                    else % Use 2D interpolation on both wavelengths and delays
+                        if isnan(p.Results.extrapval)
+                            sIntrp = interp2(tTmp, lTmp, sTmp, tNewSub, lNewSub', p.Results.method);
+                        else
+                            sIntrp = interp2(tTmp, lTmp, sTmp, tNewSub, lNewSub', p.Results.method, p.Results.extrapval);
+                        end
+                    end
+                    
+                    % Reconstruct the spectra matrix
+                    % First, unsort the sorted dims
+                    lNewSub(lNewI) = lNewSub;
+                    tNewSub(tNewI) = tNewSub;
+                    sIntrp(lNewI,tNewI) = sIntrp;
+                    
+                    % Add NaN flagged columns or rows back to data only if the dim was not interpolated:
+                    %for wavelengths
+                    %for now ignore filling NaN values... note commented
+                    %code throws an error in the unit tests
+%                     if isempty(p.Results.wavelengths) 
+%                         NaNTmp = NaN(numel(nanL),size(sIntrp,2));
+%                         NaNTmp(~nanL,:) = sIntrp;
+%                         sIntrp = NaNTmp;
+%                     end
+%                     
+%                     % for delays
+%                     if isempty(p.Results.delays) 
+%                         NaNTmp = NaN(size(sIntrp,1),numel(nanT));
+%                         NaNTmp(:,~nanT) = sIntrp;
+%                         sIntrp = NaNTmp;
+%                     end
+                    
+                    % update new values for spectra, delays, and 
+                    sNew(:,:,ii) = sIntrp;
+                    lNew(:,ii) = lNewSub;
+                    tNew(:,ii) = tNewSub;
+                    
                 end
                 
-                %remove any dims that are all NaN. This happens when not all interpWls were used 
-                %between two different grating positions
-                isWlNaN = all(isnan(interpWls),2); %all wls are NaN for each gpos, delay, rpt, and scheme
-                isGPosNaN = all(isnan(interpWls),1); %all wls are NaN for each wl, delay, rpt, and scheme
-                interpWls = interpWls(~isWlNaN,~isGPosNaN); %[wls, gpos]
-                interpSpectra = interpSpectra(~isWlNaN,:,~isGPosNaN); %[pixels, delays x rpts x schemes, gpos]
-                trimmedGPos = obj.gPos(~isGPosNaN);
+                % Undo reshape and explicit expand operation
+                % s old: [pixels, delays, rpts x g pos x schemes]
+                % s new: [pixels, delays, rpts, g pos, schemes]
+                % t old: [delays, rpts x g pos x schemes]
+                % t new: [delays, rpts, g pos]
+                % l old: [pixels, rpts x g pos x schemes]
+                % l new: [pixels, g pos]
+                % Undo reshape operations
+                sNew = reshape(sNew, lsz, tsz, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
+                lNew = reshape(lNew, lsz, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
+                tNew = reshape(tNew, tsz, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
                 
-                %update sizes
-                obj.sizes.nPixels = size(interpWls,1);
-                obj.sizes.nGPos = length(trimmedGPos);
+                % undo explicit expand operations
+                lNew = permute(lNew(:,1,:,1),[1,3,2,4]);
+                tNew = tNew(:,:,:,1);
                 
-                %convert spectra back to original dimensions and dim order
-                %[pixels, delays x rpts x schemes, gpos] -> [pixels, delays, rpts, gpos, schemes]
-                interpSpectra = reshape(interpSpectra,obj.sizes.nPixels,obj.sizes.nDelays,obj.sizes.nRpts,obj.sizes.nSchemes,obj.sizes.nGPos); %[pixels, delays, rpts, schemes, gpos]
-                interpSpectra = permute(interpSpectra,[1,2,3,5,4]); %[pixels, delays, rpts, gpos, schemes]
+                % Update object data with new wavelengths, delays, and
+                % spectra values
+                obj(objInd).spectra.data = sNew;
+                obj(objInd).wavelengths.data = lNew;
+                obj(objInd).delays.data = tNew;
                 
-                %add data back to object
-                obj.wavelengths.data = interpWls;
-                obj.spectra.data = interpSpectra;
-                obj.gPos = trimmedGPos;
-                
-            else
-                error('Expected all keyword or wavelength range [wl1, wl2] of type double.');
+                % Update object sizes
+                obj(objInd).sizes.nPixels = lsz;
+                obj(objInd).sizes.nDelays = tsz;
             end
             
-%             %trim delays
-%             if ischar(interpVals.delays)  %this is a do nothing case
-%                 % Assert correct input to ensure user isn't accidently doing something they're not aware of
-%                 assert(strcmp(interpVals.delays,'all'),'Expected all keyword or delay range [d1, d2] of type double.');
-%                 
-%             elseif isa(interpVals.delays,'double')   %this does the wavelength trim
-%                 %ensure the user has correct input before trimming
-%                 assert(length(interpVals.delays)==2, 'Expected delay range [d1, d2] of type double.');
-%                 interpVals.delays = sort(interpVals.delays);    %ensure delays are in increasing order
-%                 
-%                 %find the wavelength range indicies
-%                 t = obj.delays.data(:);  %[delays x rpts x gPos]
-%                 t = t(~isnan(t));
-%                 t = sort(t);
-%                 
-%                 %select t subrange within (inclusive) the trim range
-%                 t = t(and(t>=interpVals.delays(1),t <= interpVals.delays(2)));
-%                 
-%                 %select the object data subset that contains the trimmed t values
-%                 obj = obj.subset('delays',t);
-%                 
-%             else
-%                 error('Expected all keyword or delay range [d1, d2] of type double.');
-%             end            
+            %convert object array back to original size
+            obj = reshape(obj,objSize);
+            
         end
         
         function obj = prune(obj, varargin)

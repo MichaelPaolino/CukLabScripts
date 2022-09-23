@@ -209,9 +209,9 @@ classdef wlTR < transientSpectra
                obj(objInd) = obj(objInd).setUnits('nm','ps','');
                
                % Extract data for numerical processing
-               spectra = obj(objInd).spectra.data;
+               s = obj(objInd).spectra.data;
                t = obj(objInd).delays.data;
-               wl = obj(objInd).wavelengths.data;
+               l = obj(objInd).wavelengths.data;
                
                % Assign external chirp parameters
                if ~isempty(p.Results.chirpParams)
@@ -222,11 +222,11 @@ classdef wlTR < transientSpectra
                if ischar(p.Results.wlRef)
                    switch p.Results.wlRef
                        case 'min'
-                           wlRef = min(wl,[],'all','omitnan');
+                           wlRef = min(l,[],'all','omitnan');
                        case 'max'
-                           wlRef = max(wl,[],'all','omitnan');
+                           wlRef = max(l,[],'all','omitnan');
                        case 'mid'
-                           wlRef = mean([min(wl,[],'all','omitnan'), max(wl,[],'all','omitnan')]);
+                           wlRef = mean([min(l,[],'all','omitnan'), max(l,[],'all','omitnan')]);
                        otherwise
                            error(['Expected min, max, or mid for wlRef, got ' wlRef '.']);
                    end
@@ -245,7 +245,7 @@ classdef wlTR < transientSpectra
                % tShift: [pixels, gPos]
                
                % Calculate the delay shift amount for the specific wavelengths
-               tShift = polyval(obj(objInd).chirpParams, wl)-tRef;
+               tShift = polyval(obj(objInd).chirpParams, l)-tRef;
                
                % Prepare arguments for interpolation
                args = cell(4,1);
@@ -262,11 +262,11 @@ classdef wlTR < transientSpectra
                        for pixelInd = 1:obj(objInd).sizes.nPixels
                            % Use linear interpolation to correct for chirp
                            args{1} = t(:,rptInd,gPInd); %old delay axis
-                           args{2} = spectra(pixelInd,:,rptInd,gPInd,:); %old spectra values
+                           args{2} = s(pixelInd,:,rptInd,gPInd,:); %old spectra values
                            args{3} = t(:,rptInd,gPInd)+tShift(pixelInd,gPInd); %shifted delay axis
                            
                            %interpolate spectra values on shifted delay axis and assign to old delay axis
-                           spectra(pixelInd,:,rptInd,gPInd,:) = interp1(args{:});
+                           s(pixelInd,:,rptInd,gPInd,:) = interp1(args{:});
                        end
                    end
                end
@@ -276,22 +276,22 @@ classdef wlTR < transientSpectra
                    % find extrapolated delays (vectorized version)
                    % reshape tShift and t to match dims of spectra, and tShift for size of spectra
                    tShift2 = permute(tShift,[1,3,4,2]); %[pixels, 1, 1, gPos]
-                   tShift2 = repmat(tShift2,size(spectra,1:4)./size(tShift2,1:4)); %[pixels, delays, rpts, gPos, schemes]
+                   tShift2 = repmat(tShift2,sizePadded(s,1:4)./sizePadded(tShift2,1:4)); %[pixels, delays, rpts, gPos, schemes]
                    t2 = permute(t,[4,1,2,3]); %[1, delays, rpts, gPos]
                    
                    % find the minimum extrap delays
                    isExtrapMin = t2(:,1,:,:) > (t2 + tShift2);
                    isExtrapMax = t2(:,end,:,:) < (t2 + tShift2);
-                   inds = repmat(or(isExtrapMin,isExtrapMax), [1,1,1,1,size(spectra,5)]);
+                   inds = repmat(or(isExtrapMin,isExtrapMax), [1,1,1,1,size(s,5)]);
                    
                    % handle different extrap options
                    if isscalar(p.Results.extrap) && ~ischar(p.Results.extrap)
-                       spectra(inds) = p.Results.extrap;
+                       s(inds) = p.Results.extrap;
                    else
                        switch p.Results.extrap
                            case 'none'
                                % set all extrap values to NaN
-                               spectra(inds) = NaN;
+                               s(inds) = NaN;
     %                        case 'nearest' todo: finish writing this...
     %                            % set all extrap values to nearest
     %                            spectra(inds) = sNearset(inds);
@@ -300,7 +300,7 @@ classdef wlTR < transientSpectra
                end
 
                % Assign interpolated spectra back to object data
-               obj(objInd).spectra.data = spectra;
+               obj(objInd).spectra.data = s;
                
                %Change units back to original units
                obj(objInd) = obj(objInd).setUnits(tmpUnits{:});
