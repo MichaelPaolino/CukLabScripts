@@ -1,7 +1,6 @@
 classdef wlTR < transientSpectra
    properties
-       chirpParams = 0;
-       chirpCorrected = false;
+       chirpParams = 0; % (vector double) a polfit vector fitting white light group delay vs. wavelength
    end
    
    properties (Access = protected)
@@ -151,12 +150,6 @@ classdef wlTR < transientSpectra
         % which has zero offset. By default, this wavelength is the central
         % wavelength in each object element.
         %
-        % This method also provides some degree of cosmetic processing to handle 
-        % data clipping and extrapolation which occurs at the first and last 
-        % delay. Clipping and extrapolation occurs for each wavelength that has a
-        % non-zero chirp correction. By default, extrapolated values are also set 
-        % to NaN.
-        %
         % obj = obj.CORRECTCHIRP()
         %   Interpolates spectral data inside obj using internally assigned chirp 
         %   paramters. This call uses the default options of using the center 
@@ -167,23 +160,20 @@ classdef wlTR < transientSpectra
         %   options.
         %
         % Name-Value Pairs
-        %   'chirpParams': (vector double) a vector of polynomial coefficients 
-        %       (as defined by polyfit) to use for correction and to assign to all 
-        %       object elements. The default is to use the object element member
-        %       data.
-        %   'extrap': (char or scalar) a constant value to assign to extrapolated
-        %       points or a flag to override default interp1 extrap behavior. 
-        %       Allowed flags are: 'none','extrap'. 'none' replaces extrapolated 
-        %       points with NaN, and 'extrap' uses interp1 extrapolation. Default
-        %       is 'none'.
+        %   'chirpParams': (vector double or char array) chirp parameters to be
+        %       passed to the setChirp method. The value can either be a vector of 
+        %       chirp parameters (as defined by polfit) or a path to a chirp 
+        %       parameter .mat file.
         %   'wlRef': (char or scalar) the wavelength to use as the reference
         %       wavelength or a flag to calculate the reference wavelength. Allowed
         %       flags are: 'min', 'mid', or 'max' which choose the minimum, middle,
         %       or maximum wavelength in each object element. Default is 'mid'.
-        %   'interp': (char) the interpolation method to use as defined by interp1.
-        %       Default is 'linear'.
+        %   'interp': (char) the interpolation method passed to griddedInterpolant.
+        %       The default interpolation method is 'linear'.
+        %   'extrap': (char) an extrapolation method passed to griddedInterpolant.
+        %       The default extrapolation method is 'nearest'.
         %
-        % See Also: FITCHIRP, INTERP1, POLYVAL
+        % See Also: FITCHIRP, SETCHIRP, GRIDDEDINTERPOLANT, POLYVAL
            
            % Format object array dims into a column for easy looping
            objSize = size(obj);
@@ -193,13 +183,23 @@ classdef wlTR < transientSpectra
            % Format varargin using input parser
            p = inputParser;
            p.FunctionName = 'correctChirp';
-           p.addParameter('chirpParams', [], @(p) isvector(p));
-           p.addParameter('extrap', 'none', @(p) (isscalar(p) && ~ischar(p)) || any(strcmp(p,{'none','extrap'})));
-           p.addParameter('wlRef','mid');
+           p.addParameter('chirpParams', []);
+           p.addParameter('wlRef','mid', @(p) (ischar(p) && any(strcmp(p,{'min','mid','max'})) || isscalar(p)));
            p.addParameter('interp','linear');
+           p.addParameter('extrap','nearest');
            
            % Parse arguemnts, results will be in p.Results
            p.parse(varargin{:});
+           
+           % Setup a griddedInterpolant object with user defined interpolation and extrapolation
+           F = griddedInterpolant();
+           F.Method = p.Results.interp;
+           F.ExtrapolationMethod = p.Results.extrap;
+           
+           % Assign external chirp parameters
+           if ~isempty(p.Results.chirpParams)
+               obj = obj.setChirp(p.Results.chirpParams);
+           end
            
            % Loop over object array
            for objInd = 1:objNumel
@@ -212,11 +212,6 @@ classdef wlTR < transientSpectra
                s = obj(objInd).spectra.data;
                t = obj(objInd).delays.data;
                l = obj(objInd).wavelengths.data;
-               
-               % Assign external chirp parameters
-               if ~isempty(p.Results.chirpParams)
-                   obj(objInd).chirpParams = p.Results.chirpParams;
-               end
                
                % Determine what wavelength is the delay reference point wlRef
                if ischar(p.Results.wlRef)
@@ -234,70 +229,52 @@ classdef wlTR < transientSpectra
                    wlRef = p.Results.wlRef;
                end
                
+               % Convert array sizes of t and l to match the size of s for easy vectorization
+               % s old: [pixels, delays, rpts, g pos, schemes]
+               % s new: [pixels, delays, rpts x g pos x schemes]
+               % t old: [delays, rpts, g pos]
+               % t new: [delays, rpts x g pos x schemes]
+               % l old: [pixels, g pos]
+               % l new: [pixels, rpts x g pos x schemes]
+               t = reshape(explicitExpand(t,sizePadded(s,2:5)),obj(objInd).sizes.nDelays,[]);
+               l = reshape(explicitExpand(permute(l,[1,3,2]),sizePadded(s,[1 3:5])),obj(objInd).sizes.nPixels,[]);
+               s = reshape(s,obj(objInd).sizes.nPixels,obj(objInd).sizes.nDelays,[]);
+               
                % Evalaute t0 shifts by evaluation the polynomial at the reference point wlRef
                tRef = polyval(obj(objInd).chirpParams,wlRef);
                
-               %**This comment is used a reference only**
-               %reshape arrays to [delays, unique, everything else]
-               % spectra: [pixels, delays, rpts, grating pos, schemes]
-               % delays: [delays, rpts, gPos]
-               % wavelengths: [pixels, gPos]
-               % tShift: [pixels, gPos]
-               
-               % Calculate the delay shift amount for the specific wavelengths
-               tShift = polyval(obj(objInd).chirpParams, l)-tRef;
-               
-               % Prepare arguments for interpolation
-               args = cell(4,1);
-               args{4} = p.Results.interp;
-               
-               % Directly pass 'extrap' to interp1
-               if strcmp(p.Results.extrap,'extrap')
-                   args{5} = 'extrap';
-               end
-               
-               % Loop over all unique delay axes and interpolate spectra 
-               for gPInd = 1:obj(objInd).sizes.nGPos
-                   for rptInd = 1:obj(objInd).sizes.nRpts
-                       for pixelInd = 1:obj(objInd).sizes.nPixels
-                           % Use linear interpolation to correct for chirp
-                           args{1} = t(:,rptInd,gPInd); %old delay axis
-                           args{2} = s(pixelInd,:,rptInd,gPInd,:); %old spectra values
-                           args{3} = t(:,rptInd,gPInd)+tShift(pixelInd,gPInd); %shifted delay axis
-                           
-                           %interpolate spectra values on shifted delay axis and assign to old delay axis
-                           s(pixelInd,:,rptInd,gPInd,:) = interp1(args{:});
-                       end
-                   end
-               end
-               
-               % Handle extrapolation if the default extrap behavior of interp1 is not what the user wants
-               if (isscalar(p.Results.extrap) && ~ischar(p.Results.extrap)) || any(strcmp(p.Results.extrap,{'none','nearest'}))
-                   % find extrapolated delays (vectorized version)
-                   % reshape tShift and t to match dims of spectra, and tShift for size of spectra
-                   tShift2 = permute(tShift,[1,3,4,2]); %[pixels, 1, 1, gPos]
-                   tShift2 = repmat(tShift2,sizePadded(s,1:4)./sizePadded(tShift2,1:4)); %[pixels, delays, rpts, gPos, schemes]
-                   t2 = permute(t,[4,1,2,3]); %[1, delays, rpts, gPos]
+               % loop over extra dims
+               for ii = 1:size(s,3)
+                   % MATLAB's griddedInterpolant requires that grid vectors are sorted
+                   [t(:,ii), tI] = sort(t(:,ii));
+                   [l(:,ii), lI] = sort(l(:,ii));
+                   s(:,:,ii) = s(lI,tI,ii);
                    
-                   % find the minimum extrap delays
-                   isExtrapMin = t2(:,1,:,:) > (t2 + tShift2);
-                   isExtrapMax = t2(:,end,:,:) < (t2 + tShift2);
-                   inds = repmat(or(isExtrapMin,isExtrapMax), [1,1,1,1,size(s,5)]);
+                   % Updated the griddedInterpolant object with new vectors and data
+                   % Update grid vectors, values, and evaluate on new grid
+                   F.GridVectors = {l(:,ii), t(:,ii)};    %set interpolant grid
+                   F.Values = s(:,:,ii);                  %set interpolant values
                    
-                   % handle different extrap options
-                   if isscalar(p.Results.extrap) && ~ischar(p.Results.extrap)
-                       s(inds) = p.Results.extrap;
-                   else
-                       switch p.Results.extrap
-                           case 'none'
-                               % set all extrap values to NaN
-                               s(inds) = NaN;
-    %                        case 'nearest' todo: finish writing this...
-    %                            % set all extrap values to nearest
-    %                            spectra(inds) = sNearset(inds);
-                       end
-                   end
+                   % Define the new interpolation grid and evalaute interpolant
+                   
+                   % Define a new delay axis for each wavelength as a matrix first
+                   tShift = t(:,ii)' + polyval(obj(objInd).chirpParams, l(:,ii))-tRef;
+                   % Define the corresponding evaluation wavelength matrix
+                   lEval = explicitExpand(l(:,ii),size(tShift));
+                   
+                   % Evaluate the interpolant on the (x,y) coordinate matrix by 
+                   % reshaping tShift and lEval into column vectors, concatonating,
+                   % and followed by reshaping back into pixel x delay
+                   s(:,:,ii) = reshape(F([lEval(:), tShift(:)]),obj(objInd).sizes.nPixels, obj(objInd).sizes.nDelays);
+                   
+                   % Unsort the sorted dims
+                   s(lI,tI,ii) = s(:,:,ii);  
                end
+               
+               % After for loop, undo reshape operation
+               % s old: [pixels, delays, rpts x g pos x schemes]
+               % s new: [pixels, delays, rpts, g pos, schemes]
+               s = reshape(s, obj(objInd).sizes.nPixels, obj(objInd).sizes.nDelays, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
 
                % Assign interpolated spectra back to object data
                obj(objInd).spectra.data = s;

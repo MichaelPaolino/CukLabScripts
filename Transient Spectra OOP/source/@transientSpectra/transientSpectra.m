@@ -28,13 +28,6 @@ classdef transientSpectra
        displayNames = nameRule(); %(nameRule) object containing generic naming rules for legend and export display
     end
     
-    %methods that children classes must implement:
-%     methods (Abstract)
-%         
-%         %converts any inferior class to another inferior class 
-%         convertTransient(obj, targetObj);
-%     end
-    
     %% Constructor, load, export, get and set methods
     methods
 
@@ -1240,7 +1233,13 @@ classdef transientSpectra
         % can be done with the following strageiges: average, lower, upper, half, 
         % and linear. Stitching preserves all other dimensions, such as repeats and
         % delays. Stitching currently updates all relevant properties such as 
-        % wavelengths, spectra, and grating positions. 
+        % wavelengths, spectra, and grating positions.
+        %
+        % Note: Be careful when combining stitching and interpolation.
+        % Interpolation before stitching with extrapolation set to anything except
+        % 'none' may cause unexpected behavior. In these cases, stitch before
+        % performing interpolation.
+        %
         % todo: update spectra_std. 
         % todo: may need to create a case for direct stitching
         %
@@ -1254,11 +1253,9 @@ classdef transientSpectra
         %   and 'linear'.
             
             %optional inputs: strategy for stitching. Default is linear
-            if nargin==2
-                strategy = varargin{1};
-            else
-                strategy = 'linear';
-            end
+            p = inputParser();
+            p.addOptional('strategy','linear',@(s) ischar(s) && any(strcmp(s,{'average','lower','upper','half','linear'})));
+            p.parse(varargin{:});
                         
             % Format object array dims into a column for easy looping
             objSize = size(obj);
@@ -1286,73 +1283,79 @@ classdef transientSpectra
                 for ii = 1:size(lInd,2) %loop over grating positions
                     data(:,:,:,ii,:) = data(lInd(:,ii),:,:,ii,:); %[PIXELS, delays, rpts, GRATING POS, schemes]
                 end
-
+                
                 %permute and reshape data so that it is easier to interpolate and stitch
                 data = permute(data,[1,2,3,5,4]);   %[pixels, delays, rpts, schemes, grating pos]
                 data = reshape(data,obj(objInd).sizes.nPixels,[],obj(objInd).sizes.nGPos); %[pixels, delays*rpts*schemes, grating pos]
-
+                
             %%--Stitch wavelengths and data--%%
                 %grating positions will be stitched in pairs sequentially. If
                 %there are multiple grating positions, already stitched data
                 %will be treated as one grating position
-                tmpWl = wl(~isnan(wl(:,1)),1);    %holder for concatonated wavelengths starting from 1st grating pos
-                tmpData1 = data(~isnan(wl(:,1)),:,1);  %holder for concatonated data starting from 1st grating pos
+                wlnan = all(isnan(data),2);  %determine which wavelengths are flagged as nan (aka missing data)
+                dropGPos = all(wlnan,1);  %determine which grating positions are all nan for removing them from data
+                wl = wl(:,~dropGPos); %drop any grating positions that are all nan
+                data = data(:,:,~dropGPos); %drop any grating positions that are all nan
+                
+                tmpWl = wl(~wlnan(:,1),1);    %holder for concatonated wavelengths starting from 1st grating pos
+                tmpData1 = data(~wlnan(:,1),:,1);  %holder for concatonated data starting from 1st grating pos
+                
+                if size(wl,2) > 1
+                    for ii = 2:size(wl,2) %loop over grating positions starting from the 2nd one
+                        %remove NaN from next grating position
+                        tmpW2 = wl(~wlnan(:,ii),ii); 
+                        tmpData2 = data(~wlnan(:,ii),:,ii);
 
-                for ii = 2:obj(objInd).sizes.nGPos %loop over grating positions starting from the 2nd one
-                    %remove NaN from next grating position
-                    tmpW2 = wl(~isnan(wl(:,ii)),ii); 
-                    tmpData2 = data(~isnan(wl(:,ii)),:,ii);
+                        %First find overlap region in wavelengths
+                        high1 = tmpWl(end);    %highest wavelength in 1st grating position
+                        low2 = tmpW2(1);     %lowest wavelength in 2nd grating position
 
-                    %First find overlap region in wavelengths
-                    high1 = tmpWl(end);    %highest wavelength in 1st grating position
-                    low2 = tmpW2(1);     %lowest wavelength in 2nd grating position
+                        [low1, low1Ind] = nearestVal(tmpWl,low2); %lowest wavelength and index in 1st grating position
+                        [high2, high2Ind] = nearestVal(tmpW2,high1); %lowest wavelength and index in 2nd grating position
 
-                    [low1, low1Ind] = nearestVal(tmpWl,low2); %lowest wavelength and index in 1st grating position
-                    [high2, high2Ind] = nearestVal(tmpW2,high1); %lowest wavelength and index in 2nd grating position
+                        %Make sure indicies do not cause data/wavelength extrapolation (overlap region needs to be inclusive)
+                        if low1<low2   %check first grating position
+                            low1Ind = low1Ind + 1;
+                            low1 = tmpWl(low1Ind);
+                        end
 
-                    %Make sure indicies do not cause data/wavelength extrapolation (overlap region needs to be inclusive)
-                    if low1<low2   %check first grating position
-                        low1Ind = low1Ind + 1;
-                        low1 = tmpWl(low1Ind);
+                        if high2>high1 %check second grating position
+                            high2Ind = high2Ind - 1;
+                            high2 = wl(high2Ind,ii);
+                        end
+
+                        %define lower and upper regions
+                        lowWl = tmpWl(1:low1Ind-1); %1st grating positions lower wavelengths
+                        highWl = tmpW2(high2Ind+1:end); %2nd grating positions higher wavelengths
+                        lowData = tmpData1(1:low1Ind-1,:);   %1st grating positions lower data
+                        highData = tmpData2(high2Ind+1:end,:);   %second grating positoins higher data
+
+                        %Next interpolate middle region
+                        nInd = ceil(0.5*(length(tmpWl(low1Ind:end))+length(tmpW2(1:high2Ind))));    %average number of in-between indicies
+                        midWl = linspace(low1,high2,nInd)';  %new wavelengths in overlap region with linear spacing between them
+                        mid1Data = interp1(tmpWl,tmpData1,midWl,'linear');   %interpolate 1st grating position on overlap scale
+                        mid2Data = interp1(tmpW2,tmpData2,midWl,'linear'); %interpolate 2nd grating position on overlap scale
+
+                        %Execute strategy to combine data in overlap region
+                        switch p.Results.strategy
+                            case 'average' %take the average in the overlap region
+                                midData = 0.5*(mid1Data+mid2Data);  
+                            case 'lower' %take the lower (1st) grating position
+                                midData = mid1Data;  
+                            case 'upper' %take the higher (2nd) grating position
+                                midData = mid2Data;  
+                            case 'half'  %stitch at half-way point
+                                midData = [mid1Data(1:floor(nInd/2),:); mid2Data((floor(nInd/2)+1):end,:)];
+                            case 'linear'   %do a weighted average with a linear sweep of the weights from the 1st to 2nd grating position
+                                weightsFun = polyfit([midWl(1), midWl(end)],[0, 1],1);    %linear fit for weights
+                                weights = polyval(weightsFun,midWl);    %calculate weights from nm values
+                                midData = mid1Data.*(1-weights)+mid2Data.*weights;  %this does the weighted average
+                        end
+
+                        %concatonate the three regions across the 1st (pixel) dimension
+                        tmpWl = [lowWl; midWl; highWl]; %store in tmpWl so that it can be fed as 1st grating position in next iteration 
+                        tmpData1 = [lowData; midData; highData]; %store in tmpdata so that it can be fed as 1st grating position in next iteration 
                     end
-
-                    if high2>high1 %check second grating position
-                        high2Ind = high2Ind - 1;
-                        high2 = wl(high2Ind,ii);
-                    end
-
-                    %define lower and upper regions
-                    lowWl = tmpWl(1:low1Ind-1); %1st grating positions lower wavelengths
-                    highWl = tmpW2(high2Ind+1:end); %2nd grating positions higher wavelengths
-                    lowData = tmpData1(1:low1Ind-1,:);   %1st grating positions lower data
-                    highData = tmpData2(high2Ind+1:end,:);   %second grating positoins higher data
-
-                    %Next interpolate middle region
-                    nInd = ceil(0.5*(length(tmpWl(low1Ind:end))+length(tmpW2(1:high2Ind))));    %average number of in-between indicies
-                    midWl = linspace(low1,high2,nInd)';  %new wavelengths in overlap region with linear spacing between them
-                    mid1Data = interp1(tmpWl,tmpData1,midWl,'linear');   %interpolate 1st grating position on overlap scale
-                    mid2Data = interp1(tmpW2,tmpData2,midWl,'linear'); %interpolate 2nd grating position on overlap scale
-
-                    %Execute strategy to combine data in overlap region
-                    switch strategy
-                        case 'average' %take the average in the overlap region
-                            midData = 0.5*(mid1Data+mid2Data);  
-                        case 'lower' %take the lower (1st) grating position
-                            midData = mid1Data;  
-                        case 'upper' %take the higher (2nd) grating position
-                            midData = mid2Data;  
-                        case 'half'  %stitch at half-way point
-                            midData = [mid1Data(1:floor(nInd/2),:); mid2Data((floor(nInd/2)+1):end,:)];
-                        case 'linear'   %do a weighted average with a linear sweep of the weights from the 1st to 2nd grating position
-                            weightsFun = polyfit([midWl(1), midWl(end)],[0, 1],1);    %linear fit for weights
-                            weights = polyval(weightsFun,midWl);    %calculate weights from nm values
-                            midData = mid1Data.*(1-weights)+mid2Data.*weights;  %this does the weighted average
-                        otherwise
-                            error(['Unsupported strategy. Available stragegies are average, lower, upper, half, and linear. Got ' strategy '.']);
-                    end
-                    %concatonate the three regions across the 1st (pixel) dimension
-                    tmpWl = [lowWl; midWl; highWl]; %store in tmpWl so that it can be fed as 1st grating position in next iteration 
-                    tmpData1 = [lowData; midData; highData]; %store in tmpdata so that it can be fed as 1st grating position in next iteration 
                 end
 
             %%--Convert wavelengths and data back to original state and update object parameters--%%
@@ -1668,20 +1671,60 @@ classdef transientSpectra
         end
         
         function obj = interp(obj, varargin)
-% INTERP interpolates spectral data on user specified axes. This method
-% wraps MATLAB's interp2 function. Use name-value pairs to specify axes to
-% interpolate, followed by the interpolation values.
-
+        % INTERP interpolates spectral data on user specified axes. This method
+        % wraps MATLAB's interpn function.
+        %
+        % Use name-value pairs to specify axes to interpolate, followed by the 
+        % interpolation values. In addition, you can pass interpn methods and 
+        % extrapval parameters as name-value pairs.
+        %
+        % Notes: 
+        % -This method interpolates repeats, grating positions, and schemes
+        % seperately. 
+        % -When interpolating wavelengths over multiple grating positions, both 
+        % grating positions are interpolated onto the same axis, which may lead to 
+        % unexpected behavior when using extrapolation. In these, cases, it is 
+        % recommended to stitch before using interpolation.
+        % -This method handles NaN values by interpolating them to NaN.
+        %
+        % obj = obj.INTERP()
+        %   Do not use this call directly. This will interpolate data onto its own
+        %   axes. Note, this call does not return an error.
+        %
+        % obj = obj.INTERP('wavelengths', wlAr)
+        %   Interpolates object data wavelengths onto vector wlAr.
+        % 
+        % obj = obj.INTERP('delays', dAr)
+        %   Interpolates object data delays onto bector dAr.
+        %
+        % obj = obj.INTERP('wavelengths', wlAr, 'delays', dAr)
+        % obj = obj.INTERP('delays', dAr, 'wavelengths', wlAr)
+        %   Does a 2D interpolation onto wavelengths and delay arrays wlAr and dAr.
+        %
+        % obj = obj.INTERP(__,interpMethod)
+        % obj = obj.INTERP(__,interpMethod,extrapMethod)
+        %   Additional arguments that set the griddedInterpolant interpolation and
+        %   extrapolation methods. The defaults are 'linear' for interpolation and 
+        %   'none' for extrapolation.
+        %
+        % See Also: GRIDDEDINTERPOLANT
+            
+            % setup an input parser scheme
             p = inputParser();
-            p.addParameter('wavelengths',[]);
-            p.addParameter('delays',[]);
-            p.addParameter('method','linear');
-            p.addParameter('extrapval',NaN);
+            p.KeepUnmatched = true;
+            p.addParameter('wavelengths',[],@(v) validateattributes(v,{'double'},{'vector'}));
+            p.addParameter('delays',[],@(v) validateattributes(v,{'double'},{'vector'}));
             
-            p.parse(varargin{:});
+            % filter varargin for griddedInterpolant keywords first
+            [vOut, mInterp, mExtrap] = filterGInterpMethod(varargin,'linear','none');
             
-            lNewSub = p.Results.wavelengths;
-            tNewSub = p.Results.delays;
+            % parse remaining inputs
+            p.parse(vOut{:});
+            
+            % Setup a griddedInterpolant object with user defined interpolation and extrapolation
+            F = griddedInterpolant();
+            F.Method = mInterp;
+            F.ExtrapolationMethod = mExtrap;
             
             % Format object array dims into a column for easy looping
             objSize = size(obj);
@@ -1709,116 +1752,70 @@ classdef transientSpectra
                 % Define new sizes for outputs, which will depend on what is being interpolated
                 % Number of new wavelength elements
                 if isempty(p.Results.wavelengths)
-                    lsz = size(l,1);
+                    szl = size(l,1);
                 else
-                    lsz = length(lNewSub);
+                    szl = numel(p.Results.wavelengths);
                 end
                 
                 % Number of new delay elements
                 if isempty(p.Results.delays)
-                    tsz = size(t,1);
+                    szt = size(t,1);
                 else
-                    tsz = length(tNewSub);
+                    szt = numel(p.Results.delays);
                 end
                 
                 % The number of extra dim array elements
                 nExtra = size(s,3);
                 
                 % For efficient vectorization, initialize output arrays
-                lNew = zeros(lsz,nExtra);
-                tNew = zeros(tsz,nExtra);
-                sNew = zeros(lsz,tsz,nExtra);
+                lNew = zeros(szl,nExtra);
+                tNew = zeros(szt,nExtra);
+                sNew = zeros(szl,szt,nExtra);
                 
                 % Loop over the extra dims
-                for ii = 1:nExtra
+                for ii = 1:nExtra                   
                     % Handle no interpolation along one of the dims
                     if isempty(p.Results.wavelengths)
-                        lNewSub = l(:,ii);
+                        lNew(:,ii) = l(:,ii);
+                    else
+                        lNew(:,ii) = p.Results.wavelengths;
                     end
                     
                     if isempty(p.Results.delays)
-                        tNewSub = t(:,ii);
+                        tNew(:,ii) = t(:,ii);
+                    else
+                        tNew(:,ii) = p.Results.delays;
                     end
-                    
-%                     % Remove any NaN values in the data array that occupy a whole delay or pixel
-%                     % such rows or cols are used as a flag to drop delays and pixels. 
-%                     % Any sparse NaN values will be perserved as NaN.
-%                     nanFlag = isnan(s(:,:,ii));
-%                     nanL = all(nanFlag,2); % the wavelength should be excluded if all delay values are NaN
-%                     nanT = all(nanFlag,1); % the delay should be excluded if all wavelength values are NaN
-%                     
-%                     % Take the data index subset that is non NaN
-%                     sTmp = s(~nanL,~nanT,ii);
-%                     tTmp = t(~nanT,ii);
-%                     lTmp = l(~nanL,ii);
-
-                    % For now, ignore filling NaN values. The correctness
-                    % of such a data processing method is questionable...
-                    sTmp = s(:,:,ii);
-                    tTmp = t(:,ii);
-                    lTmp = l(:,ii);
                     
                     % In addition, MATLAB's interp requires that data points are sorted
-                    [tTmp, tTmpI] = sort(tTmp);
-                    [lTmp, lTmpI] = sort(lTmp);
-                    sTmp = sTmp(lTmpI,tTmpI);
-                    
+                    [t(:,ii), tI] = sort(t(:,ii));
+                    [l(:,ii), lI] = sort(l(:,ii));
+                    s(:,:,ii) = s(lI,tI,ii);
+
                     % sort the new values as well
-                    [lNewSub, lNewI] = sort(lNewSub(:));
-                    [tNewSub, tNewI] = sort(tNewSub(:));
+                    [lNew(:,ii), lNewI] = sort(lNew(:,ii));
+                    [tNew(:,ii), tNewI] = sort(tNew(:,ii));
                     
-                    % Determine which version of interp to call depending on the dimentionality of the data
-                    if numel(tTmp) == 1  % Use 1D interpolation on wavelengths
-                        if isnan(p.Results.extrapval)
-                            sIntrp = interp1(lTmp, sTmp, lNewSub, p.Results.method);
-                        else
-                            sIntrp = interp1(lTmp, sTmp, lNewSub, p.Results.method, p.Results.extrapval);
-                        end
-                    elseif numel(lTmp) == 1 % Use 1D interpolation on delays
-                        if isnan(p.Results.extrapval)
-                            sIntrp = interp1(tTmp, sTmp, tNewSub, p.Results.method);
-                        else
-                            sIntrp = interp1(tTmp, sTmp, tNewSub, p.Results.method, p.Results.extrapval);
-                        end    
-                    else % Use 2D interpolation on both wavelengths and delays
-                        if isnan(p.Results.extrapval)
-                            sIntrp = interp2(tTmp, lTmp, sTmp, tNewSub, lNewSub', p.Results.method);
-                        else
-                            sIntrp = interp2(tTmp, lTmp, sTmp, tNewSub, lNewSub', p.Results.method, p.Results.extrapval);
-                        end
-                    end
+                    % Generate grid vectors
+                    gridIn = {l(:,ii), t(:,ii)};
+                    gridOut = {lNew(:,ii), tNew(:,ii)};
+                    
+                    % find singleton dims in grid vectors-- interpolation requires at least 2 pts in each dim
+                    isSing = sizePadded(s,1:numel(gridIn))==1;
+                    
+                    % Update grid vectors, values, and evaluate on new grid
+                    F.GridVectors = gridIn(~isSing);    %set interpolant grid
+                    F.Values = s(:,:,ii);      %set interpolant values
+                    sNew(:,:,ii) = F(gridOut(~isSing)); %evaluate on new gride
                     
                     % Reconstruct the spectra matrix
                     % First, unsort the sorted dims
-                    lNewSub(lNewI) = lNewSub;
-                    tNewSub(tNewI) = tNewSub;
-                    sIntrp(lNewI,tNewI) = sIntrp;
-                    
-                    % Add NaN flagged columns or rows back to data only if the dim was not interpolated:
-                    %for wavelengths
-                    %for now ignore filling NaN values... note commented
-                    %code throws an error in the unit tests
-%                     if isempty(p.Results.wavelengths) 
-%                         NaNTmp = NaN(numel(nanL),size(sIntrp,2));
-%                         NaNTmp(~nanL,:) = sIntrp;
-%                         sIntrp = NaNTmp;
-%                     end
-%                     
-%                     % for delays
-%                     if isempty(p.Results.delays) 
-%                         NaNTmp = NaN(size(sIntrp,1),numel(nanT));
-%                         NaNTmp(:,~nanT) = sIntrp;
-%                         sIntrp = NaNTmp;
-%                     end
-                    
-                    % update new values for spectra, delays, and 
-                    sNew(:,:,ii) = sIntrp;
-                    lNew(:,ii) = lNewSub;
-                    tNew(:,ii) = tNewSub;
-                    
+                    lNew(lNewI,ii) = lNew(:,ii);
+                    tNew(tNewI,ii) = tNew(:,ii);
+                    sNew(lNewI,tNewI,ii) = sNew(:,:,ii);                   
                 end
                 
-                % Undo reshape and explicit expand operation
+                % After for loop, undo reshape and explicit expand operation
                 % s old: [pixels, delays, rpts x g pos x schemes]
                 % s new: [pixels, delays, rpts, g pos, schemes]
                 % t old: [delays, rpts x g pos x schemes]
@@ -1826,9 +1823,9 @@ classdef transientSpectra
                 % l old: [pixels, rpts x g pos x schemes]
                 % l new: [pixels, g pos]
                 % Undo reshape operations
-                sNew = reshape(sNew, lsz, tsz, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
-                lNew = reshape(lNew, lsz, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
-                tNew = reshape(tNew, tsz, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
+                sNew = reshape(sNew, szl, szt, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
+                lNew = reshape(lNew, szl, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
+                tNew = reshape(tNew, szt, obj(objInd).sizes.nRpts, obj(objInd).sizes.nGPos, obj(objInd).sizes.nSchemes);
                 
                 % undo explicit expand operations
                 lNew = permute(lNew(:,1,:,1),[1,3,2,4]);
@@ -1841,8 +1838,8 @@ classdef transientSpectra
                 obj(objInd).delays.data = tNew;
                 
                 % Update object sizes
-                obj(objInd).sizes.nPixels = lsz;
-                obj(objInd).sizes.nDelays = tsz;
+                obj(objInd).sizes.nPixels = szl;
+                obj(objInd).sizes.nDelays = szt;
             end
             
             %convert object array back to original size

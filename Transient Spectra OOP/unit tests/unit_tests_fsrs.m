@@ -189,6 +189,8 @@ myFSRS2.plotSpectra('legend', false);
 myFSRS2 = myFSRS.stitch('linear');
 myFSRS2.plotSpectra('legend', false);
 
+myFSRS.plotSpectra('legend', false);
+
 %default call test
 myFSRS2 = myFSRS.stitch();
 
@@ -272,7 +274,7 @@ figure;
 myFSRS.plotSpectra('legend',false);
 ylim([-0.5 1]);
 
-%% Test interpoalting spectral data
+%% Test interpolating spectral data
 myFSRS = fsrs('Sample_OC_D2O.mat');
 myFSRS = myFSRS.findRamanPumpNm();
 
@@ -282,6 +284,20 @@ myFSRS.plotSpectra();
 myFSRS = myFSRS.interp('wavelengths',-1000:1:1000);
 myFSRS.plotSpectra();
 hold off
+
+%% Test interpolating spectral data and then stitching
+myFSRS = fsrs('Sample_OC_D2O.mat');
+myFSRS = myFSRS.findRamanPumpNm();
+
+myFSRS2 = myFSRS.stitch;
+
+myFSRS = myFSRS.interp('wavelengths',-1000:1:1000);
+myFSRS = myFSRS.stitch;
+
+figure; box; hold on;
+myFSRS.plotSpectra();
+myFSRS2.plotSpectra;
+hold off;
 
 %% Export tests
 myTR = fsrs('Sample_BSP_Air.mat','shortName','chirp 8 bounces');

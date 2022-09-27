@@ -143,8 +143,6 @@ testData2 = testData2.trim('delays',[-3,3]);
 testData2.chirpParams = testData.chirpParams;
 %% Test different interpolation and extrapolation strategies for chirp correction
 testData3 = testData2.correctChirp('interp','spline');
-testData3 = testData2.correctChirp('extrap','extrap');
-testData3 = testData2.correctChirp('extrap',0);
 testData3 = testData2.correctChirp('extrap','none');
 testData3 = testData3.average;
 testData3 = testData3.stitch;
@@ -174,7 +172,7 @@ figure;
 testData2.plotSpectra('delays',[-2,0,2]);
 
 % 1d interpolation along delays
-testData2 = testData.interp('delays',-5:0.05:5);
+testData2 = testData.interp('delays',-5:0.05:5,'spline','nearest');
 figure;
 testData2.plotKinetics('wavelengths',[400,500,600]);
 
@@ -194,7 +192,7 @@ testData3.plotKinetics('wavelengths',[400,500,600]);
 % 2d interpolation along wavelengths and delays
 testData2 = testData.stitch();
 testData2 = testData2.average();
-testData2 = testData2.interp('delays',-2.5:0.05:3.5,'wavelengths',375:5:700);
+testData2 = testData2.interp('delays',-2.5:0.05:3.5,'wavelengths',375:5:700,'linear','nearest');
 figure;
 contourf(testData2.wavelengths.data, testData2.delays.data, testData2.spectra.data');
 
@@ -207,4 +205,18 @@ testData2 = testData2.interp('delays',-2.5:0.05:3.5,'wavelengths',375:5:700);
 figure;
 contourf(testData2.wavelengths.data, testData2.delays.data, testData2.spectra.data');
 
+%% Test other extra params passed for interpolation
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
 
+% 1d interpolation along delays
+testData2 = testData.interp('delays',-5:0.05:5,'spline');
+figure;
+testData2.plotKinetics('wavelengths',[400,500,600]);
+
+%% Test interpolation before stitching
+testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
+testData = testData.interp('delays',-2.5:0.05:3.5,'wavelengths',400:5:700,'linear','none');
+testData = testData.stitch();
+testData2 = testData2.average();
+figure;
+contourf(testData.wavelengths.data, testData.delays.data, testData.spectra.data');
