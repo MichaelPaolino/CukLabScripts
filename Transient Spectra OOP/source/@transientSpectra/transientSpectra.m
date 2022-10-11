@@ -290,16 +290,18 @@ classdef transientSpectra
             obj = reshape(obj, objSize);
         end   
                 
-        function [logicalOut, ind] = containsScheme(obj, targetScheme)
-        % CONTAINSSCHEME returns a logical array whose elements are true when the
-        % object array element contains the targetScheme. The output logical array
-        % is the same size as the object array.
+        function [logicalOut, ind] = containsLabel(obj, labelName, labelValue)
+        % CONTAINSLABEL returns a logical array whose elements are true when the
+        % object array element member data contains the target value. The output 
+        % logical array is the same size as the object array.
         %
-        % logicalOut = obj.CONTAINSSCHEME(targetScheme)
+        % logicalOut = obj.CONTAINSLABEL(labelName, labelValue)
+        %   Returns an logical array logicalOut of size [objSize]. Elements of 
+        %   objSize are true when obj(objElem).(labelName) contains labelValue.  
         %
-        % [logicalOut, ind] = obj.CONTAINSSCHEME(targetScheme)
+        % [logicalOut, ind] = obj.CONTAINSLABEL(labelName, labelValue)
         %   Returns an additional logical ind that indicates at which index the 
-        %   target scheme is present. The size of ind is:
+        %   target label is present. The size of ind is:
         %   [max number of schemes in any object element, [objSize]]
         %
         % See Also: GETSCHEME, GETUNIQUESCHEMES, GETCOMMONSCHEMES, SPLITSCHEMES
@@ -309,15 +311,20 @@ classdef transientSpectra
             objNumel = numel(obj);
             obj = obj(:);
             
-            %a cell array of all schemes for each object array element
-            schemeList = {obj.schemes}; 
+            %a cell array of all labels for each object array element
+            labelList = {obj.(labelName)}; 
             
-            %loop over object elements to see if its scheme list contains
-            %the targetScheme
+            %loop over object elements to see if its label list contains the labelValue
             logicalOut = false(objNumel,1);
-            ind = false(max(cellfun(@length,schemeList)),objNumel);
+            ind = false(max(cellfun(@length,labelList)),objNumel);
             for ii = 1:objNumel
-               tmp = strcmp(targetScheme,schemeList{ii});
+               if iscell(labelList{ii}) && ischar(labelValue)
+                   tmp = strcmp(labelValue,labelList{ii});
+               elseif isnumeric(labelList{ii}) && isscalar(labelValue)
+                   tmp = labelList{ii} == labelValue;
+               else
+                   error('labelName and labelValue types do not match.'); 
+               end
                ind(1:length(tmp),ii) = tmp;
                logicalOut(ii) = any(ind(:,ii));
             end
@@ -327,18 +334,19 @@ classdef transientSpectra
             ind = reshape(ind,[size(ind,1),objSize]);
         end
         
-        function [uniqueSchemes, ind] = getUniqueSchemes(obj)
-        % GETUNIQUESCHEMES returns a cell array of all unique scheme names contained
-        % in the object array.
+        function [uniqueLabels, ind] = getUniqueLabels(obj, labelName)
+        % GETUNIQUELABELS returns a cell array of all unique label values contained
+        % in the object array member data.
         %
-        % uniqueSchemes = obj.GETUNIQUESCHEMES(targetScheme)
-        %   Returns a cell array of chars that contain the unique scheme names in 
-        %   the obj array.  
+        % uniqueLabels = obj.GETUNIQUELABELS(labelName)
+        %   Returns an array that contain the unique label values specified by
+        %   labelName in obj(:).(labelName). The returned array type is the same as
+        %   the label type in the object.
         %
-        % [uniqueSchemes, ind] = obj.GETUNIQUESCHEMES(targetScheme)
+        % [uniqueLabels, ind] = obj.GETUNIQUELABELS(labelName)
         %   Returns an additional logical ind that indicates in dim 1 at which index
-        %   each  unique scheme is present. The size of ind is:
-        %   [max number of schemes in any object element, nUniqueSchemes, [objSize]]
+        %   each  unique label is present. The size of ind is:
+        %   [max number of labels in any object element, nUniqueLAbels, [objSize]]
         %
         % See Also: GETSCHEME, GETCOMMONSCHEMES, CONTAINSSCHEME, SPLITSCHEMES
         
@@ -348,15 +356,27 @@ classdef transientSpectra
             obj = obj(:);
             
             %Get unique schemes out of the object
-            schemeList = {obj.schemes};
-            schemeListAll = vertcat(schemeList{:}); %a cell array of all schemes with char as elements
-            uniqueSchemes = unique(schemeListAll); %unique schemes inside the object array
+            labelList = {obj.(labelName)};
+            if iscell(labelList{1})
+                labelListAll = vertcat(labelList{:}); %a cell array of all schemes with char as elements
+            elseif isnumeric(labelList{1})
+                labelListAll = cell2mat(labelList);
+            else
+                error('Encountered unsupported label type.');
+            end
+            uniqueLabels = unique(labelListAll); %unique schemes inside the object array
             
-            %return index of unique scheme
-            nUniqueSchemes = length(uniqueSchemes);          
-            ind = false(max(cellfun(@length,schemeList)),nUniqueSchemes,objNumel);
-            for ii = 1:nUniqueSchemes
-                [~,ind(:,ii,:)] = containsScheme(obj,uniqueSchemes{ii});
+            %return index of unique label
+            nUniqueLabels = length(uniqueLabels);          
+            ind = false(max(cellfun(@length,labelList)),nUniqueLabels,objNumel);
+            for ii = 1:nUniqueLabels
+                if iscell(uniqueLabels(ii))
+                    [~,ind(:,ii,:)] = containsLabel(obj,labelName,uniqueLabels{ii});
+                elseif isnumeric(uniqueLabels(ii))
+                    [~,ind(:,ii,:)] = containsLabel(obj,labelName,uniqueLabels(ii));
+                else
+                    error('Encountered unsupported label type.');
+                end
             end
             
             %return indecies as original size of object
@@ -365,8 +385,8 @@ classdef transientSpectra
 
         end
         
-        function [commonSchemes, ind] = getCommonSchemes(obj)
-        % GETCOMMONSCHEMES returns a cell array of scheme names that are common to 
+        function [commonLabels, ind] = getCommonLabels(obj, labelName)
+        % GETCOMMONLABELS returns a cell array of scheme names that are common to 
         % all elements of the object array.
         %
         % commonSchemes = obj.GETCOMMONSCHEMES()
@@ -385,12 +405,12 @@ classdef transientSpectra
             obj = obj(:);
             
             %get unique schemes and their indicies from the object array
-            [uniqueSchemes, ind] = obj.getUniqueSchemes();
+            [uniqueLabels, ind] = obj.getUniqueLabels(labelName);
             
             %schemes that are common to all elements of the object array
             %along object element dim 3 and scheme index dim 1
             commonInd = all(any(ind,1),3);
-            commonSchemes = uniqueSchemes(commonInd(:));
+            commonLabels = uniqueLabels(commonInd(:));
             ind = ind(:,commonInd(:),:);
             
             %return indecies as original size of object
@@ -445,7 +465,7 @@ classdef transientSpectra
             
             %schemes that are common to all elements of the object array.
             %Only these schemes, or a subset, can be returned
-            schemeList = objIn.getCommonSchemes;
+            schemeList = objIn.getCommonLabels('schemes');
             nSchemes = length(schemeList);
             
             assert(nSchemes>0,'No common schemes found. Schemes cannot be split of object array does not have common schemes');
@@ -520,7 +540,6 @@ classdef transientSpectra
             %return obj back to its original dims
             objOut = reshape(objOut, [objSize, nSchemes]);
         end
-            
     end
     
     %% Protected methods that define the inner workings of the class
@@ -679,7 +698,7 @@ classdef transientSpectra
         %1. set default naming options for exported data when there are multiple schemes and grating positions
             nameFlag = struct('shortName', length(unique({obj(:).shortName}))>1,...     %show the short name
                               'label', false,...                                        %show function specific label
-                              'scheme', length(obj.getUniqueSchemes)>1,...              %show the scheme name
+                              'scheme', length(obj.getUniqueLabels('schemes'))>1,...              %show the scheme name
                               'gPos', false,...         %show the grating position
                               'repeats', false,...      %show the rpt number
                               'delay', false,...        %show the delay number
@@ -1145,6 +1164,168 @@ classdef transientSpectra
     
     %% Data manipulation methods that modify the spectra object
     methods
+        
+        function mergedObj = merge(obj, varargin)
+% MERGE together objects in an object array into one object. 
+% Use this method when you have seperate files or objects that you want to 
+% combine over grating positions, repeats, schemes, or delays. This method
+% asserts that the spectra sizes and dim labels match before merging.
+% Additional object metadata is kept only for the 1st object element across
+% the merge dimension.
+%
+% mergedObj = obj.merge(mergeMethod);
+%   Merges all elements of obj (obj array) across the dim specified by
+%   mergeMethod. mergeMethod is a char array name of the spectra dimension,
+%   such as 'rpt'. See below for a list and description of implemented
+%   mergeMethods.
+%
+% mergedObj = obj.merge(__, 'dim', dimVal);
+%   Merges multidimentional object array obj across its dimVal dimension.
+%
+% Implemented mergeMethod keywords:
+%   'rpts' Merges the elements of the object array by treating them as
+%       different repeats. This creates a new object whose repeats are
+%       appended together. Merging across rpts is also grating position
+%       aware, meaning repeats are appended to their corresponding grating 
+%       positiong. This mergeMethod requires that all merged object 
+%       elements have the same number of pixels and delays. This method
+%       also requires that the merged objects have the same schemes.
+%
+% See Also: SPLITSCHEMES
+
+            p = inputParser;
+            p.addRequired('mergeDim');      % the object dim to merge over, e.g. repeats
+            p.addParameter('dim','all');    % the object array dim to merge over
+            
+            p.parse(varargin{:});
+            
+            % Reshape object so that merged dim is 1st
+            if ischar(p.Results.dim)
+                % merge together all dims as one
+                obj = obj(:);
+                dimOrdr = 1; %internal dim permute order
+                objSize = 1; %internal object size
+            else                
+                % determine internal dim permute order
+                dimOrdr = 1:numel(size(obj));
+                dimOrdr(p.Results.dim) = [];
+                dimOrdr = [p.Results.dim dimOrdr];
+                
+                % determine internal object size
+                objSize = [1 sizePadded(obj,dimOrdr(2:end))];
+                
+                % move merge dim to front and flatten the remaining dims
+                obj = permute(obj,dimOrdr);
+                obj = reshape(obj,[],prod(objSize));
+            end
+            
+            % The output merge object will be built off of the 1st object element along the merge dim
+            mergedObj = obj(1,:);
+            
+            % The number of object elements to merge and loop over
+            mergeNumel = size(obj,1);
+            extraDims = size(obj,2);
+            
+            % Set object units to match 1st objects units in the merge set
+            tmpUnits = cell(3,1);
+            for mergeInd = 1:mergeNumel
+                [tmpUnits{:}] = obj(mergeInd,1).getUnits();
+                obj(mergeInd,:) = obj(mergeInd,:).setUnits(tmpUnits{:});
+            end
+                
+            % Loop over extra non-merge dims
+            for objInd = 1:extraDims
+                % Gather sizes of all dims
+                sizeFields = fieldnames(obj(1,objInd).sizes);   %size field names
+                spectraSizes = zeros(mergeNumel,numel(sizeFields));  %spectra size array [nMergeObj,nSpectraDims]
+                
+                % Define the dims indicies (logical array) for various sizes
+                pixelDim = strcmp(sizeFields,'nPixels');
+                delayDim = strcmp(sizeFields,'nDelays');
+                gPosDim = strcmp(sizeFields,'nGPos');
+                rptDim = strcmp(sizeFields,'nRpts');
+                schemeDim = strcmp(sizeFields,'nSchemes');
+                
+                % Fill size double array
+                for mergeInd = 1:mergeNumel
+                    spectraSizes(mergeInd,:) = cell2mat(struct2cell(obj(mergeInd,objInd).sizes))'; %[nObj,nSpectraDims]
+                end
+                
+                % Gather the various grating positions in the data sets
+                % schemeInds: [max number of gPos in any object element, nUniquegPos, nMergeObj]
+                [uniqueGPos, gPosInds] = obj(:,objInd).getUniqueLabels('gPos'); 
+                
+                % Gather the various schemes in the data sets
+                % schemeInds: [max number of schemes in any object element, nUniqueSchemes, nMergeObj]
+                [uniqueSchemes, schemeInds] = obj(:,objInd).getUniqueLabels('schemes'); 
+                
+                % Merge implementations. Add any new implementations here!
+                switch p.Results.mergeDim
+                    case 'rpts'
+                        % Merging over rpts needs to to check that the number of wavelengths and delays
+                        % are the same and that the schemes are the same. 
+                        % The merge does not check that the wavelength or delay values are the same
+                        % If there is a mismatch in grating positions, the extra values are set to NaN
+
+                        % Assert that the number of pixels and delays is the same
+                        rInd = any([delayDim(:),pixelDim(:)],2);
+                        assert(all(spectraSizes(:,rInd)==spectraSizes(1,rInd),'all'),...
+                            'Merging of rpts requires that all merge objects have the same number of wavelengths and delays. ',...
+                            'Use obj.interp() to enforce this condition.');
+
+                        % Assert that the schemes are the same
+                        assert(all(schemeInds==schemeInds(:,:,1),'all'),...
+                            'The schemes in the object array do not match. ',...
+                            'Use obj.splitSchemes() and obj.merge() to ensure that all objects have the same schemes and in the same order');
+
+                        % calculate the sizes of the new data
+                        sz = spectraSizes(1,:);
+                        sz(gPosDim) = numel(uniqueGPos);
+                        sz(rptDim) = sum(spectraSizes(:,rptDim));
+
+                        % permute sz and create new spectra, delay, and pixel holder arrays
+                        % set spectra and delays to NaN so that they can be filled in by the loop below
+                        sz = sz([find(pixelDim),find(delayDim),find(rptDim),find(gPosDim),find(schemeDim)]);
+                        s = nan(sz); %[pixels, delays, rpts, grating pos, schemes]
+                        l = nan(sz([1,3,4]));   %[pixels, repeats, grating pos]
+                        t = nan(sz([2,3,4])); %[delays, repeats, grating pos]
+
+                        % fill in delays and spectra by object index
+                        rptInd = 0;
+                        for mergeInd = 1:mergeNumel
+                            % calculate the number of repeats and indicies of the grating positions
+                            nRpts = spectraSizes(mergeInd,rptDim);
+                            [~,gPOrder] = find((obj(mergeInd,objInd).gPos(:)) == uniqueGPos(:)');
+
+                            % copy data from object element in holder arrays
+                            s(:,:,rptInd + (1:nRpts),gPOrder,:) = obj(mergeInd,objInd).spectra.data;
+                            l(:,rptInd + (1:nRpts),gPOrder) = repmat(permute(obj(mergeInd,objInd).wavelengths.data,[1,3,2]),1,nRpts,1);
+                            t(:,rptInd + (1:nRpts),gPOrder) = obj(mergeInd,objInd).delays.data;
+
+                            % update repeat counter
+                            rptInd = rptInd + nRpts;
+                        end
+
+                        %copy holder arrays into object member data
+                        mergedObj(objInd).spectra.data = s;
+                        mergedObj(objInd).wavelengths.data = permute(mean(l,2,'omitnan'),[1,3,2]);
+                        mergedObj(objInd).delays.data = t;
+
+                        %Update sizes and grating positions
+                        mergedObj(objInd).sizes.nRpts = sz(3);
+                        mergedObj(objInd).sizes.nGPos = sz(4);
+                        mergedObj(objInd).gPos = uniqueGPos;
+                        
+                end  %end case
+            end
+            
+            % convert object back to original size
+            mergedObj = reshape(mergedObj,objSize);
+            [~,ordrInd] = sort(dimOrdr);
+            mergedObj = permute(mergedObj,ordrInd);
+            
+            
+        end
         
         function obj = average(obj, varargin)
         % AVERAGE all repeats, wavelengths, and/or delays for each element in 

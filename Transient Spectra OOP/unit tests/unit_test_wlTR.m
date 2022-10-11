@@ -16,6 +16,7 @@ myTR = wlTR(fullfile(cListPath, 'Phonon Removed',{'107','108'}),'loadType','cLis
 % Test TABin import
 myTR = wlTR({'19-12-05_13h56m05s_0p04Fl_0V_pH13_100mM_630nm_cont_0-2ns_spol',...
     '19-12-05_14h53m12s_0p04Fl_0V_pH13_100mM_460nm_cont_0-2ns_spol'},'loadType','bin');
+
 %% findT0 tests
 testData = wlTR('22-07-28_15h03m26s_OC_chirp_calibration_W_Water.mat','shortName','chirp');
 
@@ -220,3 +221,33 @@ testData = testData.stitch();
 testData2 = testData2.average();
 figure;
 contourf(testData.wavelengths.data, testData.delays.data, testData.spectra.data');
+
+%% Merge incomplete data tests (incomplete)
+% Load incomplete data
+dataCell = {'22-09-30_08h58m35s_pH_11_phosphate_Sample_Z_pH_11_100_mM_phosphate.mat','pH 11';...    
+            '22-09-30_14h35m59s_pH_11_phosphate_Sample_Z_pH_11_100_mM_phosphate.mat','pH 11 630'};
+        
+myTR = wlTR(dataCell(:,1),'shortName',dataCell(:,2));
+
+% merge data
+myTRMerged = myTR(:,1).merge('rpts');
+
+% Plot merged data
+figure;
+myTRMerged.plotSpectra('delays',100,'average',false);
+%%
+% test merging with multiple dims
+myTRRepd = repmat(myTR',4,1,2); %4x2x2   
+myTRRepd([2,4],:,:) = myTRRepd([2,4],[2,1],:);  %flip order of copy 2 and 4
+myTRRepd([3,4],:,:) = myTRRepd([3,4],:,:).average();
+
+myTRMerged = merge(myTRRepd,'rpts','dim',2);
+figure;
+myTRMerged.plotSpectra('delays',100);
+
+assert(all(size(myTRMerged)==[4,1,2]),'Merge with dim keyword returned wrong object size')
+
+myTRMergedStitched = myTRMerged.stitch('half');
+myTRMergedStitched.plotSpectra('delays',100);
+
+

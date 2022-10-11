@@ -35,14 +35,14 @@ myTS2 = myTS.getScheme(1);
 assert(all(strcmp([myTS2.schemes],myTS2(1).schemes)),'Failed to return correct scheme with direct name call');
 
 %test common scheme with the same objects
-schemeList = myTS.getCommonSchemes;
+schemeList = myTS.getCommonLabels('schemes');
 assert(all(strcmp(schemeList,{'ES - GS Raman';'ES Raman';'Electronic Background';'GS Raman';'Transient Reflectance'})),...
     'Failed to return correct common schemes with all objects the same');
 
 %test common scheme with mixed schemes
 myTS2 = transientSpectra('Sample_None_Methanol.mat');
 myTS3 = [myTS; myTS2];
-schemeList = myTS3.getCommonSchemes;
+schemeList = myTS3.getCommonLabels('schemes');
 assert(all(strcmp(schemeList,'GS Raman')),...
     'Failed to return correct common schemes with mixed scheme object array');
 
