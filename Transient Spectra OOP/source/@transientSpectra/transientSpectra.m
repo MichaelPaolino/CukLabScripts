@@ -260,7 +260,7 @@ classdef transientSpectra
         %   Returns an object array with data that corresponds to the targetScheme
         %   name or index.
         %
-        % See Also: GETUNIQUESCHEMES, GETCOMMONSCHEMES, CONTAINSSCHEME, SPLITSCHEMES        
+        % See Also: GETUNIQUELABELS, GETCOMMONLABELS, CONTAINSLABEL, SPLITSCHEMES        
         
             %prepare object array for looping
             objSize = size(obj);
@@ -304,7 +304,7 @@ classdef transientSpectra
         %   target label is present. The size of ind is:
         %   [max number of schemes in any object element, [objSize]]
         %
-        % See Also: GETSCHEME, GETUNIQUESCHEMES, GETCOMMONSCHEMES, SPLITSCHEMES
+        % See Also: GETSCHEME, GETUNIQUELABELS, GETCOMMONLABELS, SPLITSCHEMES
 
             %prepare object array for data access
             objSize = size(obj);
@@ -348,7 +348,7 @@ classdef transientSpectra
         %   each  unique label is present. The size of ind is:
         %   [max number of labels in any object element, nUniqueLAbels, [objSize]]
         %
-        % See Also: GETSCHEME, GETCOMMONSCHEMES, CONTAINSSCHEME, SPLITSCHEMES
+        % See Also: GETSCHEME, GETCOMMONLABELS, CONTAINSLABEL, SPLITSCHEMES
         
             %prepare object array for data access
             objSize = size(obj);
@@ -398,7 +398,7 @@ classdef transientSpectra
         %   index the scheme is present. The size of ind is:
         %   [max number of schemes in any object element, nCommonSchemes,[objSize]]
         %
-        % See Also: GETSCHEME, GETUNIQUESCHEMES, CONTAINSSCHEME, SPLITSCHEMES
+        % See Also: GETSCHEME, GETUNIQUELABELS, CONTAINSLABEL, SPLITSCHEMES
 
             %prepare object array for data access
             objSize = size(obj);
@@ -447,7 +447,8 @@ classdef transientSpectra
         %   Additionally returns schemeList, which is a cell array of char that
         %   contains the scheme name of each array element along the new dim.
         %
-        % See Also: GETSCHEME, GETUNIQUESCHEMES, GETCOMMONSCHEMES, CONTAINSSCHEME
+        % See Also: GETSCHEME, GETUNIQUELABELS, GETCOMMONLABELS,
+        % CONTAINSLABEL
 
         %%--PRE_PROCESSING OF OBJECT AND SCHEMES--%%
             %Get object size to determine final output object size
@@ -1200,12 +1201,11 @@ classdef transientSpectra
             p.parse(varargin{:});
             
             % Reshape object so that merged dim is 1st
-            if ischar(p.Results.dim)
-                % merge together all dims as one
+            if ischar(p.Results.dim) % merge together all dims as one
                 obj = obj(:);
-                dimOrdr = 1; %internal dim permute order
-                objSize = 1; %internal object size
-            else                
+                dimOrdr = [1, 2]; %internal dim permute order
+                objSize = [1, 1]; %internal object size
+            else % merge specific dim
                 % determine internal dim permute order
                 dimOrdr = 1:numel(size(obj));
                 dimOrdr(p.Results.dim) = [];
@@ -1416,10 +1416,18 @@ classdef transientSpectra
         % delays. Stitching currently updates all relevant properties such as 
         % wavelengths, spectra, and grating positions.
         %
-        % Note: Be careful when combining stitching and interpolation.
-        % Interpolation before stitching with extrapolation set to anything except
-        % 'none' may cause unexpected behavior. In these cases, stitch before
-        % performing interpolation.
+        % Notes: 
+        % 1. Be careful when combining stitching and interpolation. Interpolation 
+        %   before stitching with extrapolation may cause unexpected behavior. This
+        %   occurs because interpolation does not distinguish between gratings. 
+        %   Extrapolation beyond the grating wavelength range will set those values
+        %   to unrealistic non-NaN values. Stitching uses NaN as a flag that 
+        %   wavelength data is missing. When extrapolation is required, stitch 
+        %   before performing interpolation.
+        % 2. If data points are missing (set to NaN) in the overlap region for a 
+        %   particular grating position pair, the overlap region in the stitched
+        %   data point will be set to NaN. In these cases, the method returns a
+        %   warning and recommends calling average() before stitch().
         %
         % todo: update spectra_std. 
         % todo: may need to create a case for direct stitching
@@ -1429,9 +1437,25 @@ classdef transientSpectra
         %   Updates obj.spectra, obj.delays, obj.wavelengths, and obj.sizes
         %
         % obj = obj.STITCH(strategy)
-        %   Same as the obj.stitch call but with specified strategy. The strategy
-        %   input is type char. Choose from 'average', 'lower', 'upper', 'half', 
-        %   and 'linear'.
+        %   Same as the obj.stitch call but with specified strategy that deterimnes
+        %   how to handle data in the grating position overlap region. The strategy
+        %   input is type char array. The default is 'linear'
+        %
+        % The following strategies for handling overlap regions are supported:
+        %   'lower': overlap region will be data from the lower grating position
+        %   'upper': overlap region will be data from the upper grating position
+        %   'average': overlap region will be an average of the lower and upper
+        %       grating position.
+        %   'half': the lower half of the overlap region will be from the lower
+        %       grating position and the upper half of the overlap region will be
+        %       from the upper grating position.
+        %   'linear': overlap region will be a weighted average of the lower and
+        %       upper grating position, where the weights linearly change from 100%
+        %       lower on the lower end of the overlap region to 100% upper on the
+        %       upper end of the overlap region. The weights are 50%:50% in the
+        %       middle of the overlap region.
+        %
+        % See Also: AVERAGE, INTERP, MERGE
             
             %optional inputs: strategy for stitching. Default is linear
             p = inputParser();
@@ -1444,6 +1468,9 @@ classdef transientSpectra
             obj = obj(:);
             
             for objInd = 1:objNumel
+                % use this to warn user that NaN values were encountered and data stitching may not be complete
+                isDataComplete = true;
+                
             %%--Revert units to nm--%%
                 %remember old units
                 tmpUnits = cell(3,1);
@@ -1470,11 +1497,10 @@ classdef transientSpectra
                 data = reshape(data,obj(objInd).sizes.nPixels,[],obj(objInd).sizes.nGPos); %[pixels, delays*rpts*schemes, grating pos]
                 
             %%--Stitch wavelengths and data--%%
-                %grating positions will be stitched in pairs sequentially. If
-                %there are multiple grating positions, already stitched data
-                %will be treated as one grating position
-                wlnan = all(isnan(data),2);  %determine which wavelengths are flagged as nan (aka missing data)
-                dropGPos = all(wlnan,1);  %determine which grating positions are all nan for removing them from data
+                %grating positions will be stitched in pairs sequentially. If there are multiple grating positions,
+                %already stitched data will be treated as one grating position
+                wlnan = all(isnan(data),2);  %determine which wavelengths are flagged as nan for all rpts, delays, etc. (usually caused by running interp)
+                dropGPos = all(wlnan,1);  %determine which grating positions are all nan for removing them from data (rare, but otherwise crashes the method)
                 wl = wl(:,~dropGPos); %drop any grating positions that are all nan
                 data = data(:,:,~dropGPos); %drop any grating positions that are all nan
                 
@@ -1516,7 +1542,12 @@ classdef transientSpectra
                         midWl = linspace(low1,high2,nInd)';  %new wavelengths in overlap region with linear spacing between them
                         mid1Data = interp1(tmpWl,tmpData1,midWl,'linear');   %interpolate 1st grating position on overlap scale
                         mid2Data = interp1(tmpW2,tmpData2,midWl,'linear'); %interpolate 2nd grating position on overlap scale
-
+                        
+                        %Set warning flag to let user know that NaN values were encountered and stitching may be incomplete
+                        if any(isnan(mid1Data), 'all') || any(isnan(mid2Data), 'all')
+                            isDataComplete = false;
+                        end
+                        
                         %Execute strategy to combine data in overlap region
                         switch p.Results.strategy
                             case 'average' %take the average in the overlap region
@@ -1554,6 +1585,13 @@ classdef transientSpectra
                 
                 %set units back to input units
                 obj(objInd) = obj(objInd).setUnits(tmpUnits{:});
+                
+                %warn user that incomplete data was encountered
+                if ~isDataComplete
+                    warning(['Could not handle NaN values encountered while stitching the overlap region for object element %d. ',...
+                             'The overlap region for these data points was set to NaN. ',...
+                             'Calling average() before stitch() usually averages out unhandleable NaN data.'],objInd);
+                end
             end
             
             %set 

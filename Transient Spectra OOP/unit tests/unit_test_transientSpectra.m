@@ -62,6 +62,9 @@ assert(all(size(myTS2)==[4,2]),'splitScheme failed to return correct object size
 assert(all(strcmp(schemeList,{'Electronic Background';'Transient Reflectance'})),...
     'Failed to return correct schemes for splitSchemes -search -drop');
 
+%% All tests pass
+disp('All tests passed!');
+
 %% support functions
 function obj = testObjArray()
     inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...

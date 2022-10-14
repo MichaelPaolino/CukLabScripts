@@ -247,7 +247,16 @@ myTRMerged.plotSpectra('delays',100);
 
 assert(all(size(myTRMerged)==[4,1,2]),'Merge with dim keyword returned wrong object size')
 
-myTRMergedStitched = myTRMerged.stitch('half');
+figure;
+myTRMergedStitched = myTRMerged.stitch('linear');
 myTRMergedStitched.plotSpectra('delays',100);
+
+figure;
+myTRMergedStitched = myTRMerged.average;
+myTRMergedStitched = myTRMergedStitched.stitch('linear');
+myTRMergedStitched.plotSpectra('delays',100);
+
+%% All tests pass
+disp('All tests passed!');
 
 
