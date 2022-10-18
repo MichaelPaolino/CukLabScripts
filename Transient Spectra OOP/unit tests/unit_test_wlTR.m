@@ -256,6 +256,19 @@ myTRMergedStitched = myTRMerged.average;
 myTRMergedStitched = myTRMergedStitched.stitch('linear');
 myTRMergedStitched.plotSpectra('delays',100);
 
+%%
+% test merging across multiple grating positions
+dataCell = {'19-12-05_14h53m12s_0p04Fl_0V_pH13_100mM_460nm_cont_0-2ns_spol','pH 13 460';...    
+            '19-12-05_13h56m05s_0p04Fl_0V_pH13_100mM_630nm_cont_0-2ns_spol','pH 13 630'};
+        
+myTR = wlTR(dataCell(:,1),'loadType','bin','shortName',dataCell(:,2));
+figure; myTR.plotSpectra('delays',100,'average',false);
+
+myTR = myTR.merge('gPos');
+assert(all(size(myTR)==[1,1]), 'merge over gPos produced the wrong number of object elements');
+assert(myTR.sizes.nRpts == 4 && myTR.sizes.nGPos == 2, 'merge over gPos produced the wrong number of repeats and grating positions');
+figure; myTR.plotSpectra('delays',100,'average',false);
+
 %% All tests pass
 disp('All tests passed!');
 

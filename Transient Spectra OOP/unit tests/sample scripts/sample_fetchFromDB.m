@@ -42,3 +42,12 @@ subplot(1,2,2);
     ylabel('');
     xlim([50,4000]);
     ylim([-3,0.5]);
+    
+%% Commit processed data to database
+% Establish ODBC connection to data source defined above
+conn = database(dbDSN, '','');
+
+
+
+% Close the ODBC connection
+conn.close

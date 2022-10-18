@@ -1188,9 +1188,28 @@ classdef transientSpectra
 %       different repeats. This creates a new object whose repeats are
 %       appended together. Merging across rpts is also grating position
 %       aware, meaning repeats are appended to their corresponding grating 
-%       positiong. This mergeMethod requires that all merged object 
-%       elements have the same number of pixels and delays. This method
-%       also requires that the merged objects have the same schemes.
+%       position. Appending repeats does not ensure  grating positions are
+%       matched, e.g. if obj elem 1 has 2 rpts with a gPos = 460, and
+%       elem 2 has 2 rpts with gPos = 630, the merged objects will have 2
+%       gPos and 4 rpts. Note that unmatched grating positions can cause
+%       unexpected behavior when stitching and followed by averaging. It is
+%       recommended that you average before stitching. If you need the 
+%       grating positions to be matched, use the 'gPos' merge method. 
+%       Finally, all merged objects must have the same number of pixels, 
+%       delays, and the same schemes.
+%
+%   'gPos' Merges the elements of the object array by treating them as
+%       different grating positions. This creates a new object composed of
+%       the object element grating positions. This method matches repeats
+%       across grating positions by ordering them consecutively, e.g. if
+%       obj elem 1 has 2 rpts and obj elem 2 has 3 rpts, the first two rpts
+%       will be treated as the same repeat but different grating position,
+%       and the 3rd repeat of obj 2 will remain unmatched. This mergeMethod
+%       requires that each object element contains a unique set of grating 
+%       positions. If you need to merge objects with overlapping grating 
+%       positions, use the 'rpts' mergeMethod instead. Finally, all merged
+%       objects must have the same number of pixels, delays, and the same
+%       schemes.
 %
 % See Also: SPLITSCHEMES
 
@@ -1252,7 +1271,7 @@ classdef transientSpectra
                 end
                 
                 % Gather the various grating positions in the data sets
-                % schemeInds: [max number of gPos in any object element, nUniquegPos, nMergeObj]
+                % gPosInds: [max number of gPos in any object element, nUniquegPos, nMergeObj]
                 [uniqueGPos, gPosInds] = obj(:,objInd).getUniqueLabels('gPos'); 
                 
                 % Gather the various schemes in the data sets
@@ -1279,7 +1298,7 @@ classdef transientSpectra
                             'Use obj.splitSchemes() and obj.merge() to ensure that all objects have the same schemes and in the same order');
 
                         % calculate the sizes of the new data
-                        sz = spectraSizes(1,:);
+                        sz = spectraSizes(1,:); %[nObj,nSpectraDims]
                         sz(gPosDim) = numel(uniqueGPos);
                         sz(rptDim) = sum(spectraSizes(:,rptDim));
 
@@ -1304,6 +1323,64 @@ classdef transientSpectra
 
                             % update repeat counter
                             rptInd = rptInd + nRpts;
+                        end
+
+                        %copy holder arrays into object member data
+                        mergedObj(objInd).spectra.data = s;
+                        mergedObj(objInd).wavelengths.data = permute(mean(l,2,'omitnan'),[1,3,2]);
+                        mergedObj(objInd).delays.data = t;
+
+                        %Update sizes and grating positions
+                        mergedObj(objInd).sizes.nRpts = sz(3);
+                        mergedObj(objInd).sizes.nGPos = sz(4);
+                        mergedObj(objInd).gPos = uniqueGPos;
+                        
+                    case 'gPos'
+                        % Merging over gPos needs to to check that the number of wavelengths and delays
+                        % are the same and that the schemes are the same. 
+                        % The merge does not check that the wavelength or delay values are the same
+                        % If there is a mismatch in grating positions, the extra values are set to NaN
+
+                        % Assert that the number of pixels and delays is the same
+                        rInd = any([delayDim(:),pixelDim(:)],2);
+                        assert(all(spectraSizes(:,rInd)==spectraSizes(1,rInd),'all'),...
+                            ['Merging of rpts requires that all merge objects have the same number of wavelengths and delays. ',...
+                            'Use obj.interp() to enforce this condition.']);
+                        
+                        % Assert that each object element contains a unique set of grating positions
+                        % by checking that each unique gPos has only one index
+                        %[max number of gPos in any object element, nUniquegPos, nMergeObj]
+                        assert(all(sum(gPosInds,[1,3])==1,'all'),...
+                            ['Merging of gPos requires that each merge object element has a unique set of grating positions. ',...
+                            'Use obj.merge(''rpts'') if you need to merge object elements with overlaping grating positions.']);
+                        
+                        % Assert that the schemes are the same
+                        assert(all(schemeInds==schemeInds(:,:,1),'all'),...
+                            ['The schemes in the object array do not match. ',...
+                            'Use obj.splitSchemes() and obj.merge() to ensure that all objects have the same schemes and in the same order']);
+
+                        % calculate the sizes of the new data
+                        sz = spectraSizes(1,:); %[nObj,nSpectraDims]
+                        sz(gPosDim) = numel(uniqueGPos);
+                        sz(rptDim) = max(spectraSizes(:,rptDim));
+                        
+                        % permute sz and create new spectra, delay, and pixel holder arrays
+                        % set spectra and delays to NaN so that they can be filled in by the loop below
+                        sz = sz([find(pixelDim),find(delayDim),find(rptDim),find(gPosDim),find(schemeDim)]);
+                        s = nan(sz); %[pixels, delays, rpts, grating pos, schemes]
+                        l = nan(sz([1,3,4]));   %[pixels, repeats, grating pos]
+                        t = nan(sz([2,3,4])); %[delays, repeats, grating pos]
+                        
+                        % fill in delays and spectra by object index
+                        for mergeInd = 1:mergeNumel
+                            % calculate the number of repeats and indicies of the grating positions
+                            nRpts = spectraSizes(mergeInd,rptDim);
+                            [~,gPOrder] = find((obj(mergeInd,objInd).gPos(:)) == uniqueGPos(:)');
+
+                            % copy data from object element in holder arrays
+                            s(:,:,1:nRpts,gPOrder,:) = obj(mergeInd,objInd).spectra.data;
+                            l(:,1:nRpts,gPOrder) = repmat(permute(obj(mergeInd,objInd).wavelengths.data,[1,3,2]),1,nRpts,1);
+                            t(:,1:nRpts,gPOrder) = obj(mergeInd,objInd).delays.data;
                         end
 
                         %copy holder arrays into object member data
@@ -2364,6 +2441,121 @@ classdef transientSpectra
             
             % convert object array back to original size
             obj = reshape(obj,objSize);
+        end
+        
+        function [procdTable, lookupTable] = dbCommit(obj, varargin)
+% COMMIT saves the elements in obj to file and logs their location and 
+% metadata to the database.
+
+            % parse required and optional user inputs
+            p = inputParser();
+            
+            p.addRequired('conn');          %The database connection object
+            p.addRequired('procDataTable'); %the name of the table that logs processed data
+            
+            p.addParameter('path',pwd);     %default is the current working directory
+            p.addParameter('prefix','');    %use prefix to prefix the short name for all object array elements
+            p.addParameter('fkStruct',struct([])); %foriegn key struct to assign values to all rows of a fk column
+            p.addParameter('colStruct',struct([])); %column value struct to assign values to all rows of a column
+            
+            p.parse(varargin{:}); %Parse inputs and store into struct p.Results
+            
+            % Format object array dims into a column for easy looping
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            % Generate a list of columns to include into the commit--------
+            colNames = {'FileName','FilePath','ShortName','FileTypeID','TimeStamp'}; %Cols that are autofilled
+            
+            % add user columns:
+            % non-fk cols
+            if ~isempty(p.Results.colStruct)
+               colFieldNames = fieldnames(p.Results.colStruct);
+               colNames = [colNames, colFieldNames(:)'];
+            end
+            
+            % fk-cols
+            if ~isempty(p.Results.fkStruct)
+               colFieldNames = {p.Results.fkStruct.fkCol};
+               colNames = [colNames, colFieldNames(:)'];
+            end
+            
+            % Before starting the commit, check to make sure database------
+            % tables match what is being requested in the commit
+            
+            % Fetch table information to ensure that the table containsvalid column names
+            conn = p.Results.conn;
+            tmpTable = conn.fetch(['SELECT * FROM ', p.Results.procDataTable, ' WHERE ID = 0;']);
+            
+            % Ensure that all columns being requested for the commit exist in the procDataTable
+            % and order colNames in the same order as in the db table (for display purposes)
+            pTCols = tmpTable.Properties.VariableNames; %col names in db table
+            colOrder = zeros(size(colNames)); %col order for old names
+            
+            % Loop through commit col names
+            for ii = 1:numel(colNames)
+                inds = strcmp(colNames{ii},pTCols); %returns commit col name index in db table
+                assert(any(inds),'Col %s was not found in table %s.',colNames{ii}, p.Results.procDataTable); %assert an index exists
+                colOrder(ii) = find(inds); %assigns index position to colOrder
+            end
+            
+            % converts db table order into commit col order
+            [~, colOrder] = sort(colOrder); 
+            
+            % Fill in values for columns in the commit table---------------
+            % Generate formatted timestamps
+            tNow = datetime('now', 'format', "yy-MM-dd_HH'h'mm'm'ss's'"); % for file name
+            fTS = char(tNow);
+
+            tNow.Format = 'd/M/yyyy h:mm:ss a'; % for database
+            dbTS = repmat({char(tNow)},objNumel,1); %TimeStamp
+            
+            % Generate char cell arrays to populate known fields in the tables
+            shortNames = strcat(p.Results.prefix,{' '},{obj.shortName})';   
+            fileNames = strcat(fTS, '_', validateFileNames(shortNames), '.mat');
+            filePaths = repmat({p.Results.path},objNumel,1);    
+            
+            % Determine fileType foreign key
+            fileTypeTable = conn.fetch("SELECT ID, ShortName FROM FileTypes WHERE ShortName = 'tsObj';");
+            assert(~isempty(fileTypeTable), "Could not find 'tsObj' filetype in database FileTypes table.");
+            fileTypeID = repmat(fileTypeTable.ID(1),objNumel,1);    %fileTypeID
+            
+            % Build table input cell array
+            tableInputs = {fileNames,filePaths,shortNames,fileTypeID,dbTS};
+            
+            % Append extra table inputs from colStruct and fkStruct inputs
+            % non fk-cols
+            if ~isempty(p.Results.colStruct)
+                colFieldNames = fieldnames(p.Results.colStruct);
+                for ii = 1:numel(colFieldNames)
+                    % Append to table inputs the contents of colStruct by field
+                    tableInputs = [tableInputs, {repmat({p.Results.colStruct(1).(colFieldNames{ii})},objNumel,1)}];
+                end
+            end
+            
+            % fk-cols
+            if ~isempty(p.Results.fkStruct)
+               for ii = 1:size(p.Results.fkStruct,1)
+                   % Query the pk table for fk info
+                   tmpTable = conn.fetch(['SELECT ', p.Results.fkStruct(ii).pkCol,...
+                                         ' FROM ', p.Results.fkStruct(ii).pkTable,... 
+                                         ' WHERE ', p.Results.fkStruct(ii).pkDispCol ' = ''', p.Results.fkStruct(ii).pkDispVal, ''';']);
+                   % Append fk info directly to tableInputs (this should always be an integer)
+                   tableInputs = [tableInputs, {repmat({tmpTable{1,1}},objNumel,1)}];
+               end
+            end
+            
+            % Rearrange column order for display
+            tableInputs = tableInputs(colOrder);
+            colNames = colNames(colOrder);
+            
+            % Build table--table throws error if there are duplicate column/variable names
+            tableConstructor = [tableInputs(:); {'VariableNames'}; {colNames}];
+            procdTable = table(tableConstructor{:});
+            %baseNames = {obj.name}';
+            
+            lookupTable = [];
+            
         end
     end
     
