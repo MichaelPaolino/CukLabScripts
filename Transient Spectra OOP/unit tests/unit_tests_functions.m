@@ -63,3 +63,67 @@ assert(all(vals(:,1)==(1:10)') && all(isnan(vals(1:5,2))) && all(vals(6:10,2)==(
        'failed to return correct vals with dense targetVals');
 assert(all(ind(:,1)==(1:10)') && all(isnan(ind(1:5,2))) && all(ind(6:10,2)==(1:5)'),...
        'failed to return correct ind with dense targetVals');
+   
+%% genFKStruct.m
+fStruct = genFKStruct('UserID','Users','ID','FirstName',1);
+tCell = {'UserID','Users','ID','WHERE FirstName = 1'};
+assert(isequal(struct2cell(fStruct),tCell'), 'Failed to generate correct fk struct');
+
+fStruct = genFKStruct('UserID','Users','ID','FirstName','Ilya');
+tCell = {'UserID','Users','ID','WHERE FirstName = ''Ilya'''};
+assert(isequal(struct2cell(fStruct),tCell'), 'Failed to generate correct fk struct');
+
+fStruct = genFKStruct('UserID','Users','ID','FirstName',{'Ilya','Michael'});
+tCell = {'UserID','Users','ID','WHERE FirstName = ''Ilya''';...
+         'UserID','Users','ID','WHERE FirstName = ''Michael'''};
+assert(isequal(struct2cell(fStruct),tCell'), 'Failed to generate correct fk struct');
+
+fStruct = genFKStruct('UserID','Users','ID','FirstName',{'Ilya',1});
+tCell = {'UserID','Users','ID','WHERE FirstName = ''Ilya''';...
+         'UserID','Users','ID','WHERE FirstName = 1'};
+assert(isequal(struct2cell(fStruct),tCell'), 'Failed to generate correct fk struct');
+
+fStruct = genFKStruct({'UserID','SampleID'},...
+                      {'Users','Samples'},...
+                       'ID',...
+                      {'FirstName','ShortName'},...
+                      {'Ilya','Sample S'});
+tCell = {'UserID','Users','ID','WHERE FirstName = ''Ilya''';...
+         'SampleID','Samples','ID','WHERE ShortName = ''Sample S'''};
+assert(isequal(struct2cell(fStruct),tCell'), 'Failed to generate correct fk struct');
+
+%% splitPath.m
+cellOut = {'C:','Users','User','Documents','MATLAB','CukLabScripts','Transient Spectra OOP'};
+
+pathOut = splitPath('C:\Users\User\Documents\MATLAB\CukLabScripts\Transient Spectra OOP');
+assert(isequal(cellOut(:),pathOut(:)),'Failed to split path');
+
+pathOut = splitPath('C:/Users/User/Documents/MATLAB/CukLabScripts/Transient Spectra OOP');
+assert(isequal(cellOut(:),pathOut(:)),'Failed to split path');
+
+pathOut = splitPath({'C:/Users/User/Documents/MATLAB/CukLabScripts/Transient Spectra OOP'});
+assert(isequal(cellOut(:),pathOut(:)),'Failed to split path');
+
+% not a realistic use case, just to see if it works...
+pathOut = splitPath({'C:/Users\User/Documents\MATLAB/CukLabScripts\Transient Spectra OOP'});
+assert(isequal(cellOut(:),pathOut(:)),'Failed to split path');
+
+%% comparePaths.m
+path1 = fullfile(repoPath(),'test1','test2','test3.mat');
+path2 = fullfile(repoPath(),'test4','test5');
+
+[sameP, relP1, relP2] = comparePaths(path1, path2);
+assert(strcmp(sameP,repoPath()) && strcmp(relP1, fullfile('test1','test2','test3.mat')) && strcmp(relP2, fullfile('test4','test5')),...
+    'Failed to compare paths');
+
+[sameP, relP1, relP2] = comparePaths(repoPath(), path2);
+assert(strcmp(sameP,repoPath) && isempty(relP1) && strcmp(relP2, fullfile('test4','test5')),...
+    'Failed to compare paths');
+
+[sameP, relP1, relP2] = comparePaths(path1, repoPath());
+assert(strcmp(sameP,repoPath()) && strcmp(relP1, fullfile('test1','test2','test3.mat')) && isempty(relP2),...
+    'Failed to compare paths');
+
+[sameP, relP1, relP2] = comparePaths(path1, path2,'/');
+assert(strcmp(sameP,repoPath('/')) && strcmp(relP1, strjoin({'test1','test2','test3.mat'},'/')) && strcmp(relP2, strjoin({'test4','test5'},'/')),...
+    'Failed to compare paths');

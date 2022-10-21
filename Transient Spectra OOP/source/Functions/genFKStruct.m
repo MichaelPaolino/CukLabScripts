@@ -1,4 +1,4 @@
-function fkStruct = genFKStruct(fkCol, pkTable, pkCol, pkDispCol, pkDispVal)
+function fkStruct = genFKStruct(fkCol, pkTable, pkCol, varargin)
 % GENFKSTRUCT generates the foreign key input structure for
 % transientSpectra dbCommit. Use this structure to set foreign key values
 % by the display column of the primary key table.
@@ -23,14 +23,49 @@ function fkStruct = genFKStruct(fkCol, pkTable, pkCol, pkDispCol, pkDispVal)
 %   cell array. Any singleton inputs are expanded to match the size of the
 %   largest cell array. Mixed cell/char array inputs are allowed.
 %
+% todo: add WHERE clause option
+%
 % See Also: TRANSIENTSPECTRA, DBCOMMIT
     
+    % parse varargin for user input
+    switch nargin
+        case 4  % User supplied a WHERE statement
+            whrStmt = varargin{1};
+            % Ensure that the WHERE statement contains 'WHERE'
+            if iscell(whrStmt)
+               for ii = 1:numel(whrStmt)
+                   assert(contains(whrStmt{ii},'WHERE'),'WHERE statement must contain WHERE clause.');
+               end
+            else
+               assert(contains(whrStmt,'WHERE'),'WHERE statement must contain WHERE clause.');
+            end
+        case 5  % User supplied a value column and its value
+            % Convert value element into cell if not already a cell array
+            if ~iscell(varargin{2})
+                varargin{2} = {varargin{2}};
+            end
+            
+            % Add '...' to strings and convert double to strings
+            for ii = 1:numel(varargin{2})
+               if isnumeric(varargin{2}{ii})
+                   varargin{2}{ii} = num2str(varargin{2}{ii});
+               else
+                   varargin{2}{ii} = ['''' char(varargin{2}{ii}) ''''];
+               end
+            end
+            
+            % Generate WHERE statement
+            whrStmt = strcat({'WHERE '}, varargin{1}, {' = '}, varargin{2});
+        otherwise
+            error('genFKStruct requires 4 or 5 arguments.');
+    end
+
     % convert input args into a single cell array for looping
-    argsIn = {fkCol, pkTable, pkCol, pkDispCol, pkDispVal};
+    argsIn = {fkCol, pkTable, pkCol, whrStmt};
     argsNumel = zeros(size(argsIn));   %this will hold the size of each argument
     
     % loop over all arguments, convert to cell array, get and store size
-    argsIn = struct2cell(ensureCellVals(cell2struct(argsIn,{'v1','v2','v3','v4','v5'},2)));    %ensure cell array
+    argsIn = struct2cell(ensureCellVals(cell2struct(argsIn,{'v1','v2','v3','v4'},2)));    %ensure cell array
         
     for ii = 1:numel(argsIn)
         argsIn{ii} = argsIn{ii}(:); %ensure column cell array
@@ -54,5 +89,4 @@ function fkStruct = genFKStruct(fkCol, pkTable, pkCol, pkDispCol, pkDispVal)
     fkStruct = struct('fkCol',argsIn{1},...
                       'pkTable',argsIn{2},...
                       'pkCol',argsIn{3},...
-                      'pkDispCol',argsIn{4},...
-                      'pkDispVal',argsIn{5});
+                      'WHERE',argsIn{4});
