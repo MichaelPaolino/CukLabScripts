@@ -92,68 +92,107 @@ classdef transientSpectra
            if nargin==0 % construct a default object
                 % do nothing              
            else % data is available, build non-default object array
-                              
-               % Use input parser to parse user arguments
-               p = inputParser;
-               p.FunctionName = 'transientSpectra';
-               p.StructExpand = false;
-               
-               % Use valVarCell to validate both cell and non-cell inputs
-               p.addRequired('dataSource',@(p) valVarCell(p, @(c) ischar(c))); % Must be a char array or cell array of char array
-               p.addParameter('shortName','', @(p) valVarCell(p,@(c) ischar(c))); % Must be a char array or cell array of char array
-               p.addParameter('loadType','dataHolder', @(p) valVarCell(p,@(c) ischar(c))); % Must be a char array or cell array of char array
-               
-               % parse inputs and store results in struct p.Results
-               p.parse(varargin{:}); 
-               
-               % convert parsed results into struct whose elements are cells
-               results = ensureCellVals(p.Results);
-               
-               % determine desired size of the object based on size of dataSource cell array
-               argSize = size(results.dataSource);    %this will be the final size of the object data
-               argNumel = numel(results.dataSource);  %for easy looping, the number of elements
-               results.dataSource = results.dataSource(:); %for easy looping, convert dataSource into cell vector [n x 1]
-                
-               % ensure that the cell array size matches the object size by and convert into column vector
-               results.loadType = explicitExpand(results.loadType, argSize);
-               results.loadType = results.loadType(:); %for easy looping, convert shortName into cell vector
+               if nargin == 1 && isa(varargin{1},'transientSpectra')    %generic conversion to superclass
+                    % Format object array dims into a column for easy looping
+                    objSize = size(varargin{1});
+                    objNumel = numel(varargin{1});
+                    subObj = varargin{1}(:);
+                    
+                    %Set subObj units to match transientSpectra units
+                    subObj = subObj.setUnits('nm','ps','mOD');
+                    
+                    % Copy value to initialize obj array
+                    obj(objNumel).name = subObj(objNumel).name;
+                    
+                    % Copy all object member data
+                    for objInd = 1:objNumel
+                        obj(objInd).spectra = subObj(objInd).spectra;
+                        obj(objInd).spectra_std = subObj(objInd).spectra_std;
+                        obj(objInd).wavelengths = subObj(objInd).wavelengths;
+                        obj(objInd).delays = subObj(objInd).delays;
+                        obj(objInd).t0 = subObj(objInd).t0;
+                        obj(objInd).gPos = subObj(objInd).gPos;
+                        obj(objInd).name = subObj(objInd).name;
+                        obj(objInd).shortName = subObj(objInd).shortName;
+                        obj(objInd).description = subObj(objInd).description;
+                        obj(objInd).schemes = subObj(objInd).schemes;
+                        obj(objInd).sizes = subObj(objInd).sizes;
+                        obj(objInd).flags = subObj(objInd).flags;
+                        obj(objInd).displayNames = subObj(objInd).displayNames;
+                    end
+                    
+                    % Assign correct units to relevant numeric data. This method can be overriden in a subclass
+                    for objInd = 1:objNumel                      
+                        obj(objInd) = obj(objInd).assignUnits();
+                    end
+                    
+                    %Set default units--this can be further changed in the subclass constructor call
+                    obj = obj.setUnits('nm','ps','mOD');
+                    
+                    % Reconstruct object array
+                    obj = reshape(obj, objSize);
+               else
+                   % Use input parser to parse user arguments
+                   p = inputParser;
+                   p.FunctionName = 'transientSpectra';
+                   p.StructExpand = false;
 
-               results.shortName = explicitExpand(results.shortName, argSize);
-               results.shortName = results.shortName(:); %for easy looping, convert shortName into cell vector
-               
-               % Create object array by loading data into last element first
-               % (this is recommended in MATLAB help)
-               obj(argNumel) = obj(1).importData(results.dataSource{argNumel},results.loadType{argNumel});
-               
-               % Loop over remaining elemenets and update object member data
-               for objInd = 1:argNumel-1
-                   obj(objInd) = obj(objInd).importData(results.dataSource{objInd},results.loadType{objInd});
-               end
-               
-               % Update any optional paramters
-               for objInd = 1:argNumel
-                   % Update short name if it exists
-                   if ~isempty(results.shortName{objInd})
-                        obj(objInd).shortName = results.shortName{objInd};
+                   % Use valVarCell to validate both cell and non-cell inputs
+                   p.addRequired('dataSource',@(p) valVarCell(p, @(c) ischar(c))); % Must be a char array or cell array of char array
+                   p.addParameter('shortName','', @(p) valVarCell(p,@(c) ischar(c))); % Must be a char array or cell array of char array
+                   p.addParameter('loadType','dataHolder', @(p) valVarCell(p,@(c) ischar(c))); % Must be a char array or cell array of char array
+
+                   % parse inputs and store results in struct p.Results
+                   p.parse(varargin{:}); 
+
+                   % convert parsed results into struct whose elements are cells
+                   results = ensureCellVals(p.Results);
+
+                   % determine desired size of the object based on size of dataSource cell array
+                   argSize = size(results.dataSource);    %this will be the final size of the object data
+                   argNumel = numel(results.dataSource);  %for easy looping, the number of elements
+                   results.dataSource = results.dataSource(:); %for easy looping, convert dataSource into cell vector [n x 1]
+
+                   % ensure that the cell array size matches the object size by and convert into column vector
+                   results.loadType = explicitExpand(results.loadType, argSize);
+                   results.loadType = results.loadType(:); %for easy looping, convert shortName into cell vector
+
+                   results.shortName = explicitExpand(results.shortName, argSize);
+                   results.shortName = results.shortName(:); %for easy looping, convert shortName into cell vector
+
+                   % Create object array by loading data into last element first
+                   % (this is recommended in MATLAB help)
+                   obj(argNumel) = obj(1).importData(results.dataSource{argNumel},results.loadType{argNumel});
+
+                   % Loop over remaining elemenets and update object member data
+                   for objInd = 1:argNumel-1
+                       obj(objInd) = obj(objInd).importData(results.dataSource{objInd},results.loadType{objInd});
                    end
-                   
-                   %If data has been loaded succesfully, set each element default object flag to false
-                   obj(objInd).flags.isDefault = false;
-               end
-               
-               % Assign units to relevant numeric data. This method can be overriden in a subclass
-               % Note: assignUnits does not support object array functionality because different 
-               % object array elements may have different unit assignments.
-               for objInd = 1:argNumel
-                   obj(objInd) = obj(objInd).assignUnits();
-               end
-               
-               %Set default units
-               obj = obj.setUnits('nm','ps','mOD');
-               
-               %reshape object to match input array shape
-               obj = reshape(obj,argSize);
-               
+
+                   % Update any optional paramters
+                   for objInd = 1:argNumel
+                       % Update short name if it exists
+                       if ~isempty(results.shortName{objInd})
+                            obj(objInd).shortName = results.shortName{objInd};
+                       end
+
+                       %If data has been loaded succesfully, set each element default object flag to false
+                       obj(objInd).flags.isDefault = false;
+                   end
+
+                   % Assign units to relevant numeric data. This method can be overriden in a subclass
+                   % Note: assignUnits does not support object array functionality because different 
+                   % object array elements may have different unit assignments.
+                   for objInd = 1:argNumel                      
+                       obj(objInd) = obj(objInd).assignUnits();
+                   end
+
+                   %Set default units
+                   obj = obj.setUnits('nm','ps','mOD');
+
+                   %reshape object to match input array shape
+                   obj = reshape(obj,argSize);
+               end %isa
            end %nargin
         end %constructor
                
@@ -572,29 +611,15 @@ classdef transientSpectra
                 case 'dataHolder'    %this should be saved dataholder object that contains structs dh_static and dh_array
                     % Use ConvertDH to load object data from path
                     obj = convertDH(obj,myPath);
-                case 'tsObj'
+                    
+                case 'tsObj'    %Override this case in children classes if you want to perserve child object type
                     % Load from .mat file and convert .mat variables to cell array
                     tmp = struct2cell(load(myPath));
+                    obj = validateObjData(tmp, 'transientSpectra');
                     
-                    % Check object type
-                    isTSObj = false(1,numel(tmp));
-                    for ii = 1:numel(tmp)
-                        isTSObj = isa(tmp{ii},'transientSpectra');
-                    end
+                    %Set units to match the output of other import types
+                    obj = obj.setUnits('nm','ps','mOD');
                     
-                    % Make sure transientSpectra object exists in .mat file
-                    assert(any(isTsObj),'Attempted to import a .mat file that did not contain a transientSpectra object.\nFile: %s',myPath);
-                    
-                    if numel(tmp) > 1
-                       warning('Imported a .mat file with more than one variable. If you need all variables call load(...) directly.\nFile: %s',myPath); 
-                    end
-                    
-                    % Warn user that multiple variables were encountered
-                    if sum(isTSObj) > 1
-                        warning('Imported a .mat file that contains more than one transientSpectra object. Keeping only the first variable encountered. If you need all variables call load(...) directly.');
-                    end
-                    
-                    obj = tmp{isTSObj};
                 otherwise
                    error('Unsupported load type: %s.', loadType);
             end
@@ -2305,10 +2330,11 @@ classdef transientSpectra
         %
         % obj = obj.FINDT0(varargin)
         %   Finds the t0 for the dataset with optional name-value pairs:
-        %   'tRange': (2 element numeric vector) the delay range to fit for t0. The
-        %       default value is either  +/-min(t) if t is negative or t:10*minStep
-        %       if t is positive and where minStep is the smallest delay step in 
-        %       the data.
+        %   'tRange': (2 element numeric vector or 'all') the delay range to fit 
+        %       for t0. The default value is either  +/-min(t) if t is negative or 
+        %       t:10*minStep if t is positive and where minStep is the smallest 
+        %       delay step in the data. Use the 'all' keyword to use the full delay
+        %       range of the data.
         %   'wlAr': (numeric vector) wavelengths at which to perform the t0 fit. 
         %       The default is the center-most wavelength in the data.
         %   'fitFun': (function handle) A custom function handle to fit the t0 with
@@ -2331,7 +2357,7 @@ classdef transientSpectra
             % Format varargin using input parser
             p = inputParser;
             p.FunctionName = 'findT0';
-            p.addParameter('tRange', [], @(p) (isnumeric(p) && numel(p)==2) || isempty(p));
+            p.addParameter('tRange', [], @(p) (isnumeric(p) && numel(p)==2) || isempty(p) || (ischar(p) && strcmp(p,'all')));
             p.addParameter('wlAr', [], @(p) (isvector(p) && isnumeric(p)) || isempty(p));
             p.addParameter('fitFun',@(x,y) sum(lsqFitSigmoid(x, y).*[0,0,1,0]), @(p) isa(p,'function_handle'));
            
@@ -2358,6 +2384,11 @@ classdef transientSpectra
                       minDelayStep = min(abs(diff(obj(objInd).delays.data,1,1)),[],'all','omitnan');
                       results.tRange = minDelay + [0, 10*minDelayStep];
                    end
+               % If user specified 'all'
+               elseif ischar(p.Results.tRange) && strcmp(p.Results.tRange,'all')
+                   t = obj(objInd).delays.data;
+                   t = mean(t,[2:ndims(t)],'omitnan');
+                   results.tRange = [min(t), max(t)];
                end
                
                % Subset and trim the object to the desired wavelength and delay range

@@ -8,6 +8,7 @@ myTS = transientSpectra('Sample_BSP_Water_rpts_schemes_gpos_delays.mat','shortNa
 
 myTS = transientSpectra({'Sample_BSP_Water_rpts_schemes_gpos_delays.mat','Sample_BSP_Water_rpts_schemes_gpos_delays.mat','Sample_BSP_Water_rpts_schemes_gpos_delays.mat'});
 
+% Load by array test
 inputTable = {'spectra 1', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
               'spectra 2', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat';...
               'spectra 3', 'Sample_BSP_Water_rpts_schemes_gpos_delays.mat'};    
@@ -61,6 +62,14 @@ assert(all(strcmp(schemeList,{'ES - GS Raman';'ES Raman';'GS Raman';'Transient R
 assert(all(size(myTS2)==[4,2]),'splitScheme failed to return correct object size');
 assert(all(strcmp(schemeList,{'Electronic Background';'Transient Reflectance'})),...
     'Failed to return correct schemes for splitSchemes -search -drop');
+
+%% Class conversion tests
+% Class conversion tests
+myFSRS = fsrs('22-10-21_10h07m42s_MeOH_Fluence_8p75_uJ,_initial_methanol_FSRS_spectrum','loadType','tsObj');
+myTS = transientSpectra(repmat(myFSRS,5,1));
+
+figure; myFSRS.plotSpectra();
+figure; myTS.plotSpectra();
 
 %% All tests pass
 disp('All tests passed!');

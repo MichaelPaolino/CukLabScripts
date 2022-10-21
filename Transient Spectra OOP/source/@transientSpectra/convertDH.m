@@ -53,8 +53,8 @@ function obj = convertDH(obj, myPath)
     
     %extract cell data into matrix
     %wlc_tmp = permute(cell2mat(cellDHArray(strcmp(dhFields,'wlc'),1,:)),[2,3,1]); %[pixel, array ind]
-    spectra_tmp = reshape(cell2mat(cellProcData(strcmp(procDataFields,'data'),:,:)),[],nArray,obj.sizes.nSchemes); %[pixel, array ind, data scheme]
-    spectrastd_tmp = reshape(cell2mat(cellProcData(strcmp(procDataFields,'std'),:,:)),[],nArray,obj.sizes.nSchemes); %[pixel, array ind, data scheme]
+    spectra_tmp = real(reshape(cell2mat(cellProcData(strcmp(procDataFields,'data'),:,:)),[],nArray,obj.sizes.nSchemes)); %[pixel, array ind, data scheme]
+    spectrastd_tmp = real(reshape(cell2mat(cellProcData(strcmp(procDataFields,'std'),:,:)),[],nArray,obj.sizes.nSchemes)); %[pixel, array ind, data scheme]
     
     if isAcquisition
         rpts_tmp = permute(cell2mat(cellDHArray(strcmp(dhFields,'Repeat'),1,:)),[2,3,1]); %[1, array ind]

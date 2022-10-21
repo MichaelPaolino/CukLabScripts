@@ -392,7 +392,7 @@ classdef wlTR < transientSpectra
                     contour(wl,t,data',25);
                     hold on;
                     p1 = plot(wl,myFP(:,3),'r','DisplayName','sigmoid t0');
-                    p2 = plot(wl,polyval(chirpFit,wl),'k--','DisplayName','polynomial');
+                    p2 = plot(wl,polyval(chirpFit(:,objInd),wl),'k--','DisplayName','polynomial');
                     hold off;
                     
                xlabel('Wavelength (nm)');
