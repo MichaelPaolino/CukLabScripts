@@ -2496,7 +2496,9 @@ classdef transientSpectra
             % convert object array back to original size
             obj = reshape(obj,objSize);
         end
-
+        
+        function concatObj = concat(obj, varargin)
+        end
     end
     
     %% Database methods
