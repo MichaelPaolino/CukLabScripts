@@ -108,6 +108,17 @@ assert(isequal(cellOut(:),pathOut(:)),'Failed to split path');
 pathOut = splitPath({'C:/Users\User/Documents\MATLAB/CukLabScripts\Transient Spectra OOP'});
 assert(isequal(cellOut(:),pathOut(:)),'Failed to split path');
 
+% check relative vs absolute paths
+% Absolute path on MacOS
+cellOut = {'/','Users','User','Documents','MATLAB','CukLabScripts','Transient Spectra OOP'};
+pathOut = splitPath('/Users/User/Documents/MATLAB/CukLabScripts/Transient Spectra OOP');
+assert(isequal(cellOut(:),pathOut(:)),'Failed to split path');
+
+% Relative path on Windows
+cellOut = {'Users','User','Documents','MATLAB','CukLabScripts','Transient Spectra OOP'};
+pathOut = splitPath('Users\User\Documents\MATLAB\CukLabScripts\Transient Spectra OOP');
+assert(isequal(cellOut(:),pathOut(:)),'Failed to split path');
+
 %% comparePaths.m
 path1 = fullfile(repoPath(),'test1','test2','test3.mat');
 path2 = fullfile(repoPath(),'test4','test5');
@@ -127,3 +138,17 @@ assert(strcmp(sameP,repoPath()) && strcmp(relP1, fullfile('test1','test2','test3
 [sameP, relP1, relP2] = comparePaths(path1, path2,'/');
 assert(strcmp(sameP,repoPath('/')) && strcmp(relP1, strjoin({'test1','test2','test3.mat'},'/')) && strcmp(relP2, strjoin({'test4','test5'},'/')),...
     'Failed to compare paths');
+
+% test with linux root '/'
+[sameP, relP1, relP2] = comparePaths('/asdf/asdf/p', '/asdf/bsdf/p','/');
+assert(strcmp(sameP,'/asdf') & strcmp(relP1,'asdf/p') & strcmp(relP2,'bsdf/p'),'Failed to compare paths');
+
+%% isAbsolutePath.m
+tf = isAbsolutePath({'/asdf\asdf\asdf','asdf\asdf\asdf','C:\asdf\asdf\asdf'});
+assert(all(tf==[1,0,1]),'Absolute Path Failed');
+
+tf = isAbsolutePath({'/asdf\asdf\asdf','asdf\asdf\asdf','C:\asdf\asdf\asdf'}');
+assert(all(tf==[1,0,1]'),'Absolute Path Failed');
+
+tf = isAbsolutePath('/asdf\asdf\asdf');
+assert(tf,'Absolute Path Failed');
