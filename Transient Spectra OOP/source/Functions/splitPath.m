@@ -1,13 +1,15 @@
 function fileParts = splitPath(pathIn)
 % SPLITPATH splits a file path into component parts at platform-dependent
 % file sperators. This method searches for all platform-dependent
-% separators.
+% separators. If the path is an absolute path, the first element of
+% fileParts will be the drive letter (Windows) or root, '/', (Mac and 
+% Linux).
 %
 % fileParts = splitPath(pathIn)
 %   Returns a cell array of char, fileParts, which are the path components
 %   char array pathIn. 
 %
-% See Also: FILEPARTS, FILESEP, FULLFILE, SPLIT
+% See Also: fileparts, filesep, fullfile, splitPath, split, strjoin
 
 fileSepChars = {'/','\'};
 
@@ -30,6 +32,12 @@ for ii = 1:numel(fileSepChars)
         % file seperator. This replaces the current element of fileParts
         % with a cell array of variable length.
         fileParts{jj} = split(fileParts{jj},fileSepChars{ii});
+        
+        % if the path begins with '/' or '\', the first char will be empty
+        % On MacOS and Linux, this is root, so add it to the list
+        if isempty(fileParts{jj}{1})
+            fileParts{jj}{1} = '/';
+        end
     end
     
     % Flatten nested cell arrays
