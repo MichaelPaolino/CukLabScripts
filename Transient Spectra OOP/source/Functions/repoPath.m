@@ -16,8 +16,19 @@ function pathOut = repoPath(varargin)
             assert(ischar(varargin{1}),'File separator expected to be of type char');
             fs = varargin{1};
         otherwise
-        error('comparePaths expects 2 or 3 inputs')
+        error('repoPath() expects 0 or 1 inputs')
     end
     
-    pathOut = strjoin({'G:','.shortcut-targets-by-id','1O21NYESEEKxBx8k6l21vr3Feo26hcErZ'},fs);
+    % Check if user has a custom repository path
+    if isfile(fullfile(userpath(),'getCustomRepoPath.m'))
+        tmp = splitPath(getCustomRepoPath());
+        if ~isempty(tmp) && strcmp(tmp{1},'/')
+            tmp(1) = [];
+            pathOut = ['/',strjoin(tmp,fs)];
+        else
+            pathOut = strjoin(tmp,fs);
+        end
+    else
+        pathOut = strjoin({'G:','.shortcut-targets-by-id','1O21NYESEEKxBx8k6l21vr3Feo26hcErZ'},fs);
+    end
 end

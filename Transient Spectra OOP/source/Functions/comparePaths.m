@@ -56,21 +56,21 @@ relP1 = p1Split(~isSame1);
 relP2 = p2Split(~isSame2);
 
 % use strjoin to rebuild paths, but include special case to handle root in (MacOS and Linux)
-if ~isempty(sameP) && strcmp(sameP{1},'/')
+if ~isempty(sameP) && strcmp(sameP(1),'/')
     sameP(1) = [];
     sameP = ['/' strjoin(sameP,fs)];
 else
     sameP = strjoin(sameP,fs);
 end
 
-if ~isempty(relP1) && strcmp(relP1{1},'/')
+if ~isempty(relP1) && strcmp(relP1(1),'/')
     relP1(1) = [];
     relP1 = ['/' strjoin(relP1,fs)];
 else
     relP1 = strjoin(relP1,fs);
 end
 
-if ~isempty(relP2) && strcmp(relP2{1},'/')
+if ~isempty(relP2) && strcmp(relP2(1),'/')
     relP2(1) = [];
     relP2 = ['/' strjoin(relP2,fs)];
 else
