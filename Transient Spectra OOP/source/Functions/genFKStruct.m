@@ -1,7 +1,7 @@
 function fkStruct = genFKStruct(fkCol, pkTable, pkCol, varargin)
 % GENFKSTRUCT generates the foreign key input structure for
-% transientSpectra dbCommit. Use this structure to set foreign key values
-% by the display column of the primary key table.
+% transientSpectra dbStageSave. Use this structure to set foreign key 
+% values by the display column of the primary key table.
 %
 % Note: This function does not check for valid input tables or columns 
 % against the database

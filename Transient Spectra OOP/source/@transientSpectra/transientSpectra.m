@@ -290,6 +290,87 @@ classdef transientSpectra
 
         end
         
+        function [s,l,t] = getNumeric(obj)
+% GETNUMERIC returns a double array of object spectra data that has been
+% cleaned for further numerical processing. Cleaning the data involves:
+%   -Flattening spectra data to a 2D array for each object element
+%   -Ensuring data is of the same scheme and units
+%   -Interpolating data onto the same wavelengths and delays
+%   -Removing any NaN points along with their wavelengths and delays
+%   -Sorting wavelengths and delays in ascending order
+% The first object element determines the units, wavelengths, and delays
+%
+% s = obj.getNumeric()
+%   Returns object array spectra data as a 3D array of size [nl, nt, nobj]
+%
+% [s,l,t] = obj.getNumeric()
+%   Additionally returns interpolation wavelengths, l [nl, 1], and 
+%   delays, t [nt, 1].
+%
+            
+            objNumel = numel(obj);
+            obj = obj(:);
+
+            % Ensure object array data contains only one scheme (otherwise processing is ambiguous)
+            commonLabels = obj.getCommonLabels('schemes');
+            
+            assert(numel(commonLabels)>0,'Object array does not contain a common scheme. Cannot return numeric data.');
+            if numel(commonLabels)>1
+                warning('Object array contains multiple common schemes. Returning numeric data for %s.', commonLabels{1});
+            end
+            
+            obj = obj.getScheme(commonLabels{1});
+
+            % Average and stitch out any repeats and grating positions in the data
+            obj = obj.average();    %ensure there is only one repeat
+            obj = obj.stitch();     %ensure there is only one grating position
+
+            % Assign the same units to all object array elements--defined by the 1st array element
+            tmpUnits = cell(3,1);
+            [tmpUnits{:}] = obj(1).getUnits();
+            obj = obj.setUnits(tmpUnits{:});
+
+            % Interpolate data on the same delay and wavelength axis--defined by the 1st array element
+            t = real(obj(1).delays.data);
+            l = real(obj(1).wavelengths.data);
+            nl = numel(l);
+            nt = numel(t);
+            objAr = obj.interp('wavelengths',l,'delays',t,'linear','none');
+
+            % Get numerical object data as an array
+            s = zeros(nl,nt,objNumel);
+            for sInd = 1:objNumel
+                s(:,:,sInd) = real(objAr(sInd).spectra.data);
+            end
+
+            % Drop any NaN values
+            if any(isnan(s),'all')
+                warning('NaN values were encountered in the data. The corresponding delays and/or wavelengths will be dropped from the analysis');
+
+                % Remove any NaN points that are NaN for all delays within a given spectrum
+                tnan = any(all(isnan(s),1),3);
+                s = s(:,~tnan,:);
+                t = t(~tnan);
+
+                % Remove any NaN points that are NaN for all wavelengths within a given spectrum
+                lnan = any(all(isnan(s),2),3);
+                s = s(~lnan,:,:);
+                l = l(~lnan);
+
+                % Remove any remaining NaN points
+                tnan = any(isnan(s),[1,3]);
+                lnan = any(isnan(s),[2,3]);
+                s = s(~lnan,~tnan,:);
+                l = l(~lnan);
+                t = t(~tnan);
+            end
+
+            % sort data by increasing wavelength and delay
+            [l, lInd] = sort(l,'ascend');
+            [t, tInd] = sort(t,'ascend');
+            s = s(lInd,tInd,:); 
+        end
+        
         %Schemes manipulation
         function obj = getScheme(obj, targetScheme)
         % GETSCHEME returns an object array that only contains the target scheme.
@@ -428,11 +509,11 @@ classdef transientSpectra
         % GETCOMMONLABELS returns a cell array of scheme names that are common to 
         % all elements of the object array.
         %
-        % commonSchemes = obj.GETCOMMONSCHEMES()
+        % commonSchemes = obj.GETCOMMONLABELS()
         %   Returns a cell array of chars that contain the common scheme names in 
         %   the obj array.
         %
-        % [commonSchemes, ind] = obj.GETCOMMONSCHEMES()
+        % [commonSchemes, ind] = obj.GETCOMMONLABELS()
         %   Returns an additional logical ind that indicates in dim 1 at which 
         %   index the scheme is present. The size of ind is:
         %   [max number of schemes in any object element, nCommonSchemes,[objSize]]
@@ -624,48 +705,7 @@ classdef transientSpectra
                    error('Unsupported load type: %s.', loadType);
             end
         end
-
-        % Note: in unit testing this runs too slow because FSRS/TR matlab
-        % files require uncompressing the full file before checking the
-        % contents
-        function loadType = determineLoadType(obj, myPath, defaultType)
-        % DETERMINELOADTYPE returns an object-specific type string that informs the
-        % loadPath method on which load type to execute. If a file is given without
-        % its extention (.mat or .bin files), this method will attempt to determine
-        % its extention. If the load type cannot be determined, this method returns
-        % the file extention.
-        %
-        % Override this method to return subclass-specific load types. This method
-        % works best when its superclass call is done first and the subclass call
-        % contains parsing code for load types not handled in the superclass call.
-        %
-        % The TRANSIENTSPECTRA call of DETERIMNELOADTYPES supports the following
-        % load types:
-        %   'dataHolder': a *.mat file with dh_array and dh_static structs
-        %   'tsObj': a *.mat file with that contains a transientSpectra object
-            
-            % Determine file extention
-            [~,~,fileExt] = fileparts(myPath);
-
-            % For .mat files (or files without extention, which can also be .mat files when using load)
-            if strcmp(fileExt,'.mat') || isempty(fileExt)
-                mVars = whos('-file',myPath); % Get attributes for variables saved in file
-
-                % Check that variables exist
-                if isempty(mVars) %The file does not exist or is not a .mat file
-                    loadType = fileExt;
-                else %The file exists and has variables inside it
-                    if any(strcmp({mVars.name},'dh_static')) && any(strcmp({mVars.name},'dh_array'))
-                        loadType = 'dataHolder';
-                    else
-                        loadType = '.mat';
-                    end
-                end 
-            else
-                loadType = fileExt;
-            end
-         end
-        
+       
         % CONVERTDH converts a data holder into a transientSpectra. 
         % See convertDH.m for generic implementation. Override this method in 
         % subclasses for specific implementation.
@@ -2549,7 +2589,7 @@ classdef transientSpectra
 %       all object elements. The structure field name is the column name 
 %       and field value is the column value. Example: if you want to set a 
 %       column named isDataGood to true for all rows, you would pass 
-%       struct('isDataGood', true) as the value argument.
+%       struct('IsDataGood', true) as the value argument.
 %   'fkStruct': (struct array) allows the user to set foreign key columns 
 %       by values in the primary key table. This adds the foreign key 
 %       column to stageTable. Use genFKStruct to generate the structure
