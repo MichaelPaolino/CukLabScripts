@@ -201,6 +201,63 @@ classdef transientSpectra
         
         %%**GET-SET METHODS**%%
         %Data units
+        function sn = getShortName(obj)
+% GETSHORTNAME returns a cell array of shortNames that is the same size as
+% the input obj array.
+%
+% sn = obj.getShortName()
+%   Returns cell array sn that is the same size of obj and is populated
+%   with obj(elem).shortName
+%
+% See Also: setShortName
+            
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            % Initialize output cell
+            sn = cell(objNumel,1);
+            
+            % Loop over objects
+            for objInd = 1:objNumel
+                sn{objInd} = obj(objInd).shortName;
+            end
+            
+            % Reshape output cell to match object size
+            sn = reshape(sn,objSize);
+        end
+        
+        function obj = setShortName(obj, sn)
+% SETSHORTNAME assigns a cell array of short names to the calling object.
+% The size of the input cell array must match or be expandable to match the
+% size of the object array. Expandable means that any singleton dim of the
+% input cell can be expanded in size to the corresponding dim of obj.
+%
+% obj = obj.setShortName(sn)
+%   Expands cell array sn so that it is the same size of obj and assigns 
+%   obj(elem).shortName with the corresponding element of sn.
+%
+% See Also: getShortName
+            
+            % Format object array dims into a column for easy looping
+            objSize = size(obj);
+            objNumel = numel(obj);
+            obj = obj(:);
+            
+            % Expand sn to match object size (or throw error if not possible)
+            sn = explicitExpand(sn, objSize);
+            sn = sn(:);
+            
+            % Loop over objects and assign new short name
+            for objInd = 1:objNumel
+                obj(objInd).shortName = sn{objInd};
+            end
+            
+            % Reshape object back to original size
+            obj = reshape(obj,objSize);
+        end
+        
         function obj = setUnits(obj,wavelengthUnit,delayUnit,spectraUnit)
         % SETUNITS sets the units for the wavelengths, delays, and spectra.
         % Use an empty char array, [] or '', as a flag to skip changing the unit.
@@ -371,43 +428,70 @@ classdef transientSpectra
             s = s(lInd,tInd,:); 
         end
         
-        %Schemes manipulation
-        function obj = getScheme(obj, targetScheme)
-        % GETSCHEME returns an object array that only contains the target scheme.
-        % The target scheme can be either the char name of the scheme or its index.
-        % 
-        % obj = obj.GETSCHEME(targetScheme)
-        %   Returns an object array with data that corresponds to the targetScheme
-        %   name or index.
-        %
-        % See Also: GETUNIQUELABELS, GETCOMMONLABELS, CONTAINSLABEL, SPLITSCHEMES        
+        function obj = getLabel(obj, labelName, labelTarget)
+% GETLABEL returns an object array that only contains the target label
+% value for a given label name.
+% 
+% obj = obj.getLabel(labelName, labelTarget)
+%   Returns an object array with data that corresponds to the labelTarget
+%   name or index for a given labelName. For example, if you want to return
+%   the 1st grating position, obj = obj.getLabel('gPos',1); will return an
+%   object array that excludes all other grating positions.
+%
+% See Also: GETUNIQUELABELS, GETCOMMONLABELS, CONTAINSLABEL, SPLITSCHEMES        
         
             %prepare object array for looping
             objSize = size(obj);
             objNumel = numel(obj);
             obj = obj(:);
             
+            % Make sure field/label/property exists in obj
+            assert(any(strcmp(fieldnames(obj),labelName)),'Field %s does not exist.',labelName);
+            
             %loop over object elements
             for objInd = 1:objNumel
                 %compare target schemes against available schemes in object
-                if ischar(targetScheme) %if scheme is a name, convert it to an index
-                    schemeInd = strcmp(targetScheme,obj(objInd).schemes);
-                    assert(any(schemeInd),[targetScheme ' was not found for object element ' num2str(objInd) '.']);
+                if ischar(labelTarget) %if scheme is a name, convert it to an index
+                    subInd = strcmp(labelTarget,obj(objInd).(labelName));
+                    assert(any(subInd),[labelTarget ' was not found for object element ' num2str(objInd) '.']);
                 else %if scheme is already an index
-                    schemeInd = targetScheme;
-                    assert(schemeInd<=length(obj(objInd).schemes),[num2str(schemeInd) ' is greater than the number ',...
-                                                                 'of availble schemes for object element' num2str(objInd) '.']);
+                    subInd = labelTarget;
+                    assert(subInd<=length(obj(objInd).(labelName)),'%d is greater than the number of availble %s for object element %d.',...
+                                                                 subInd, labelName, objInd);
                 end
                 
                 %update object properties
-                obj(objInd).spectra.data = obj(objInd).spectra.data(:,:,:,:,schemeInd);
-                obj(objInd).spectra_std.data = obj(objInd).spectra_std.data(:,:,:,:,schemeInd);
-                obj(objInd).schemes = obj(objInd).schemes(schemeInd);
-                obj(objInd).sizes.nSchemes = 1;
+                switch labelName
+                    case 'schemes'
+                        obj(objInd).spectra.data = obj(objInd).spectra.data(:,:,:,:,subInd);
+                        obj(objInd).spectra_std.data = obj(objInd).spectra_std.data(:,:,:,:,subInd);
+                        obj(objInd).schemes = obj(objInd).schemes(subInd);
+                        obj(objInd).sizes.nSchemes = 1;
+                    case 'gPos'
+                        obj(objInd).spectra.data = obj(objInd).spectra.data(:,:,:,subInd,:);
+                        obj(objInd).spectra_std.data = obj(objInd).spectra_std.data(:,:,:,subInd,:);
+                        obj(objInd).wavelengths.data = obj(objInd).wavelengths.data(:,subInd);
+                        obj(objInd).delays.data = obj(objInd).delays.data(:,:,subInd);
+                        obj(objInd).gPos = obj(objInd).gPos(subInd);
+                        obj(objInd).sizes.nGPos = 1;
+                    otherwise
+                        error('Unsupported label name %s.',labelName);
+                end
             end
             
             %return obj back to its original dims
             obj = reshape(obj, objSize);
+        end
+        
+        function obj = getScheme(obj, targetScheme)
+        % GETSCHEME is deprecated. Use obj.getLabel('schemes',targetScheme);
+        % 
+        % obj = obj.GETSCHEME(targetScheme)
+        %   Returns an object array with data that corresponds to the targetScheme
+        %   name or index.
+        %
+        % See Also: GETLABEL        
+             obj = obj.getLabel('schemes', targetScheme);
         end   
                 
         function [logicalOut, ind] = containsLabel(obj, labelName, labelValue)
@@ -655,7 +739,7 @@ classdef transientSpectra
             
             %loop over object elements
             for ii = 1:nSchemes
-                objOut(:,ii) = objIn.getScheme(schemeList{ii});
+                objOut(:,ii) = objIn.getLabel('schemes',schemeList{ii});
             end
             
             %return obj back to its original dims

@@ -38,7 +38,7 @@ ylabel('Singular Value');
 % trying to come up with a rule to establish which spectra need to be
 % flipped or swapped. Keep in mind this rule may be different for different
 % types of data sets.
-trSVD = trSVD.resetC(); %resets flips
+trSVD = trSVD.resetC(); %resets flips and permutes
 trSVD = trSVD.permuteC(1:trSVD.nSets,[2,1]); %swaps absorptive with emissive so that absorptive is 1st and emissive is 2nd
 trSVD = trSVD.flipC(1,squeeze(trSVD.Vr(end,1,:)<0),true);   % flip 1st component based on raw kinetic traces--must end as a number greater than zero (emissive growth)
 trSVD = trSVD.flipC(2,squeeze(trSVD.Vr(end,2,:)>0),true); % flip 2st component based on raw kinetic traces--must end as a number less than zero (absorptive decay)
