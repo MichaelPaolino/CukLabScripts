@@ -20,7 +20,7 @@ function varargout = lsqFitExpGrow(x, y)
     
     %Define exp growth fit function
     f = 1/sqrt(2*pi)*exp(-(5:0.5:5).^2/2);
-    myExpGrow = @(a,b,c,tau,fwhm,t0,t) nonuniformConv(a+heaviside(t-t0).*(b-c*(1-exp(-heaviside(t-t0).*(t-t0)/tau))),t,2.355*f/fwhm,0.5*fwhm/2.355);
+    myExpGrow = @(a,b,c,tau,fwhm,t0,t) nonuniformConv(a+hvsd(t-t0).*(b-c*(1-exp(-hvsd(t-t0).*(t-t0)/tau))),t,2.355*f/fwhm,0.5*fwhm/2.355);
     
     % convert x-y data to column vectors
     y = y(:);
@@ -50,4 +50,8 @@ function varargout = lsqFitExpGrow(x, y)
     
     % do the least squares fit
     [varargout{1:nargout}] = lsqnonlin(@(fp) myExpGrow(fp(1),fp(2),fp(3),fp(4),fp(5),fp(6),x)-y,guess,lb,ub,opts);
+end
+
+function y = hvsd(x)
+    y = 0.5*(x == 0) + (x > 0);
 end

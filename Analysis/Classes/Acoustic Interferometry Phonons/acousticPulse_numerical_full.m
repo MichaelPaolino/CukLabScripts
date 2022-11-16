@@ -7,12 +7,12 @@ rho = 5.11; %density in g/cm2
 c_optical = 299792.458; %speed of light in nm/ps
 c_acoustic = sqrt((B+4/3*G)*1e10/rho)*1e-5; %acoustic velocity in nm/ps calcualted from elasticity constants, should be close to 7.9 nm/ps
 
-lambda = 15; %penetration depth in nm
+lambda = 12; %penetration depth in nm
 dt = 0.2; %in ps
 dx = 0.5; %in nm
 t = 0:dt:30; %in ps
 x = 0:dx:(max(t+0.8)*c_acoustic); %in nm
-t0 = 0.1; %pulse duration in ps
+t0 = 1.2; %pulse duration in ps
 
 %tau = ([9.9 10 10.1]*7.85/15)+4; %for directly inputting tau
 %xi = 0:0.1:(1.2*max(tau));
@@ -79,7 +79,7 @@ end
 Vtrue = V;
 Strain = diff(Vtrue,1,1)/(xi(2)-xi(1));
 Stress = diff(Vtrue,1,1)/(xi(2)-xi(1))-theta_matrix(xi(2:end)-0.5*(xi(2)-xi(1)),tau,tau0);
-Velocity = diff(Vtrue,1,2)/(tau(2)-tau(1)); Velocity = [zeros(size(Velocity,1),1) interp1_2D(tau(1:end-1)+0.5*(tau(2)-tau(1)),Velocity,tau(2:end-1))];
+Velocity = diff(Vtrue,1,2)/(tau(2)-tau(1)); Velocity = [zeros(size(Velocity,1),1) interp1(tau(1:end-1)+0.5*(tau(2)-tau(1)),Velocity',tau(2:end-1))'];
 Acceleration = diff(Vtrue,2,2)/(tau(2)-tau(1))^2; Acceleration = [zeros(size(Acceleration,1),1) Acceleration];
 xip = xi(2:end)-0.5*(xi(2)-xi(1));
 
@@ -139,17 +139,17 @@ for ii = 1:1:(length(tau)-2)
         xlabel(xlabval);
         
         %inset:
-        axes('Position',[.2 .135 .705 .22])
-            box on;
-            plot([0, max(xi_tmp)],[0,0],'--k');
-            hold on;
-            plot(xip_tmp,1000*Strain(:,ii));
-            hold off;
-            xlim([9 100]);
-            ylim([-1, 3]);
-            %ylabel('% x10^3');
-            text(11, 2.5, '%, x10^{-3}');
-            set(gca,'xtick',[])
+%         axes('Position',[.2 .135 .705 .22])
+%             box on;
+%             plot([0, max(xi_tmp)],[0,0],'--k');
+%             hold on;
+%             plot(xip_tmp,1000*Strain(:,ii));
+%             hold off;
+%             xlim([9 100]);
+%             ylim([-1, 3]);
+%             %ylabel('% x10^3');
+%             text(11, 2.5, '%, x10^{-3}');
+%             set(gca,'xtick',[])
 %     subplot(5,1,5);
 %         plot([0, max(xi_tmp)],[0,0],'--k');
 %         hold on; plot(xip_tmp,Stress(:,ii)); hold off;
@@ -191,8 +191,8 @@ ylabel('dR');
 legend('Numerical','Guess');
 
 figure;
-a0 = 0.9; %norm factor for guess plot
-phi - 180; %phase for guess plot
+a0 = 0.8; %norm factor for guess plot
+phi = 150; %phase for guess plot
 plot(tPlot,dR-expGrowth,tPlot,a0*expGrowth.*cos(4*pi*c_acoustic*n/l*tPlot+phi/180*pi));
 xlabel('t (ps)');
 ylabel('dR');

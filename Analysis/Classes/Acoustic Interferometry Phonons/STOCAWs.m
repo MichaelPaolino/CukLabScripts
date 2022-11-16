@@ -169,7 +169,7 @@ classdef STOCAWs
             tChirp = obj.t'-polyval(obj.cp,obj.l)+polyval(obj.cp,obj.lt0);
             
             % Pre-calculate Ms with pump convolution
-            ht = heaviside(tChirp);
+            ht = hvsd(tChirp);
             M = ht.*(1-exp(-ht.*tChirp/obj.t0Guess)).*(1-exp(-ht.*tChirp.*obj.xiGuess/obj.cAcoustic)).*obj.Ms;
             
             % Check for non-zero or invalid pump duration
@@ -444,4 +444,8 @@ function depsf = pulsef(xi,t0,fwhm,eta0,etaConv,R,c,f)
     
     % Complex acousic pulse spectrum in the frequency domain, Eq. 6
     depsf = -eta0*etaConv/2*T_w.*g_w.*P_w; 
+end
+
+function y = hvsd(x)
+    y = 0.5*(x == 0) + (x > 0);
 end

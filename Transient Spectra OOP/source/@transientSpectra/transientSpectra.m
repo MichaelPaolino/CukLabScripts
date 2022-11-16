@@ -2772,10 +2772,13 @@ classdef transientSpectra
             
             % If keepName flag is set to true, replace update flagged rows with current file name in database
             if (p.Results.keepFileName || p.Results.keepFilePath) && any(~isnan(IDs))
-                replaceIDs = IDs(~isnan(IDs));
+                replaceIDs = IDs(~isnan(IDs(:)));
                 replaceIDsStr = strjoin(cellfun(@(c) num2str(c),num2cell(replaceIDs(:),numel(replaceIDs)),'UniformOutput',false),', ');
                 fileNameTable = conn.fetch(sprintf('SELECT ID, FileName, FilePath FROM %s WHERE ID IN (%s) ORDER BY ID',...
                                             p.Results.procDataTable,replaceIDsStr));
+                
+                % Assert that all request IDs exist in the database
+                assert(all(any(replaceIDs'==fileNameTable.ID,1),2),'One or more ''update'' IDs were not found in table %s. Check to make sure you are updating the correct row IDs.',p.Results.procDataTable);
                 
                 % Make sure the output table is in the same order as repalceIDs                        
                 [~,inds] = sort(replaceIDs);
