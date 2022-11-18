@@ -141,7 +141,7 @@ classdef STOCAWs
             tChirp = obj.t'-polyval(obj.cp,obj.l)+polyval(obj.cp,obj.lt0);
             
             % Calcualted sub spectrum (without t0/causality)
-            Ms = obj.amp.*exp(-(0.002*pi*imag(obj.freq)+obj.tau).*tChirp).*cos(0.002*pi*tChirp.*real(obj.freq)+pi*obj.phase);
+            Ms = obj.amp.*exp(-(0.002*pi*imag(obj.freq)+1/obj.tau).*tChirp).*cos(0.002*pi*tChirp.*real(obj.freq)+obj.phase);
         end
         
         function M = get.M(obj)

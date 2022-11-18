@@ -171,19 +171,34 @@ if video
 end
 
 %% Calculate scattered signal amplitude
-l = 375;
-n = 2.4;
+l = 400;
+inds45 = 1:floor(5*numel(tau)/5);
+tPlot = (tau-offset*tau0)*lambda/c_acoustic;
+tPlot = tPlot(inds45);
+caws = STOCAWs(l,tPlot,0,l,0);
+caws = caws.setp(eta0, lambda, t0, 0);
+caws.t0Guess = t0;
+caws.xiGuess = lambda;
+caws.tau = 999;
 
-kz = 2*pi*n./l;
+% Integrate to get probe scattering response
+kz = 2*pi*caws.nSTO./l*cos(caws.tht);
 k0 = 2*pi./l;
 z = xip*lambda;
 dz = z(2)-z(1);
 rdeps = 1i*k0^2/2/kz*sum(Strain.*exp(2*1i*kz*z(:)),1)*dz;
 
-tPlot = (tau-offset*tau0)*lambda/c_acoustic;
-dR = abs(rdeps).*cos(angle(rdeps));
-expGrowth = 0.5*(max(dR)+min(dR(floor(numel(dR)/2):end)))*(1-exp(-tPlot/t0)).*(1-exp(-tPlot/lambda*c_acoustic));
+% Calculate the change in reflectivity (due to acoustic scatter only)
+amp = -1000*log10(1-2*abs(caws.ts1.*caws.ts2.*rdeps.*caws.deps)./abs(caws.rs1));
+phase = pi-angle(caws.rs1.*conj(caws.ts1.*caws.ts2.*rdeps.*caws.deps));
+dR = amp.*cos(phase+15/180*pi);
+dR = dR(inds45);
 
+% Guess for non-pulse surfaces strain response
+inds12 = floor(numel(dR)/2):numel(dR);
+expGrowth = 0.5*(max(dR(inds12))+min(dR(inds12)))*(1-exp(-tPlot/t0)).*(1-exp(-tPlot/lambda*c_acoustic));
+
+% Plot numerical result against guess
 figure;
 plot(tPlot,dR,tPlot,expGrowth);
 xlabel('t (ps)');
@@ -191,9 +206,9 @@ ylabel('dR');
 legend('Numerical','Guess');
 
 figure;
-a0 = 0.8; %norm factor for guess plot
-phi = 150; %phase for guess plot
-plot(tPlot,dR-expGrowth,tPlot,a0*expGrowth.*cos(4*pi*c_acoustic*n/l*tPlot+phi/180*pi));
+fmFull = dR-expGrowth;
+% There is a small difference in the later times because of numerical integration error
+plot(tPlot,fmFull,tPlot,caws.M);
 xlabel('t (ps)');
 ylabel('dR');
 legend('Numerical','Guess');

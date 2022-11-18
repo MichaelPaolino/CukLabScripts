@@ -553,10 +553,10 @@ classdef wlTR < transientSpectra
                    % and tau is a CAWs coherence decay constant modelling spectrometer
                    % resolution and acoustic damping.
                              %l0,  l1,  eta0,  xi,  t0,  tau
-                   myGuess = [0,   1,   1e-3,  xg,  t0g, 0];
-                   typicalX= [1,   1,   1e-3,  5,   1,   1e-3];
+                   myGuess = [0,   1,   1e-3,  xg,  t0g, 1000];
+                   typicalX= [1,   1,   1e-3,  5,   1,   500];
                    myLB =    [-10, 0.9, 0,     0,   0,   0];
-                   myUB =    [10,  1.1, 0.1,   100, 10,  1]; 
+                   myUB =    [10,  1.1, 0.1,   100, 10,  1e6]; 
                    
                    % Setup MultiStart optimization with lsqnonlin and tight convergence criteria
                    opts = optimoptions(@lsqnonlin,'FunctionTolerance',1e-9,'MaxFunctionEvaluations',2000,'MaxIterations',2000,'Display','off','TypicalX',typicalX);
