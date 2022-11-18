@@ -7,12 +7,12 @@ rho = 5.11; %density in g/cm2
 c_optical = 299792.458; %speed of light in nm/ps
 c_acoustic = sqrt((B+4/3*G)*1e10/rho)*1e-5; %acoustic velocity in nm/ps calcualted from elasticity constants, should be close to 7.9 nm/ps
 
-lambda = 12; %penetration depth in nm
+lambda = 15; %penetration depth in nm
 dt = 0.2; %in ps
 dx = 0.5; %in nm
 t = 0:dt:30; %in ps
 x = 0:dx:(max(t+0.8)*c_acoustic); %in nm
-t0 = 1.2; %pulse duration in ps
+t0 = 0.1; %pulse duration in ps
 
 %tau = ([9.9 10 10.1]*7.85/15)+4; %for directly inputting tau
 %xi = 0:0.1:(1.2*max(tau));
