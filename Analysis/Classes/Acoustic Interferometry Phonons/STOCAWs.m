@@ -17,7 +17,7 @@ classdef STOCAWs
         t;          % delays [nt,1]--set by constructor
         cp;         % chirp polynomial [1,np]--set by constructor
         lt0;        % wavelength scalar that defines t0 for t and cp
-        tau = 0;    % CAWs exponential attenuation caused by acoustic damping and spectrometer resolution
+        tau = inf;    % CAWs exponential attenuation caused by acoustic damping and spectrometer resolution
         
         xi = 15;    % spatial extent of transformation strain in nm--set by user
         t0 = 1e-3;  % formation time of transformation strain in ps--set by user
