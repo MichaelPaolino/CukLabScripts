@@ -1,6 +1,6 @@
 function fileParts = splitPath(pathIn)
 % SPLITPATH splits a file path into component parts at platform-dependent
-% file sperators. This method searches for all platform-dependent
+% file separators. This method searches for all platform-dependent
 % separators. If the path is an absolute path, the first element of
 % fileParts will be the drive letter (Windows) or root, '/', (Mac and 
 % Linux).

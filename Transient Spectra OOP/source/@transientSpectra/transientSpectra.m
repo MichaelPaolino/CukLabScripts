@@ -159,12 +159,15 @@ classdef transientSpectra
 
                    results.shortName = explicitExpand(results.shortName, argSize);
                    results.shortName = results.shortName(:); %for easy looping, convert shortName into cell vector
-
+                   
+                   % Convert input paths into platform-specific paths
+                   results.dataSource = convertPaths(results.dataSource);
+                   
                    % Create object array by loading data into last element first
                    % (this is recommended in MATLAB help)
                    obj(argNumel) = obj(1).importData(results.dataSource{argNumel},results.loadType{argNumel});
 
-                   % Loop over remaining elemenets and update object member data
+                   % Loop over remaining elements and update object member data
                    for objInd = 1:argNumel-1
                        obj(objInd) = obj(objInd).importData(results.dataSource{objInd},results.loadType{objInd});
                    end
@@ -2189,10 +2192,8 @@ classdef transientSpectra
             % parse remaining inputs
             p.parse(vOut{:});
             
-            % Setup a griddedInterpolant object with user defined interpolation and extrapolation
+            % Setup a griddedInterpolant object
             F = griddedInterpolant();
-            F.Method = mInterp;
-            F.ExtrapolationMethod = mExtrap;
             
             % Format object array dims into a column for easy looping
             objSize = size(obj);
@@ -2271,9 +2272,15 @@ classdef transientSpectra
                     % find singleton dims in grid vectors-- interpolation requires at least 2 pts in each dim
                     isSing = sizePadded(s,1:numel(gridIn))==1;
                     
-                    % Update grid vectors, values, and evaluate on new grid
+                    % Update grid vectors and values
                     F.GridVectors = gridIn(~isSing);    %set interpolant grid
                     F.Values = s(:,:,ii);      %set interpolant values
+                    
+                    % Set user defined interpolation and extrapolation
+                    F.Method = mInterp;
+                    F.ExtrapolationMethod = mExtrap;
+                    
+                    % Evaluate data on a new grid
                     sNew(:,:,ii) = F(gridOut(~isSing)); %evaluate on new gride
                     
                     % Reconstruct the spectra matrix
