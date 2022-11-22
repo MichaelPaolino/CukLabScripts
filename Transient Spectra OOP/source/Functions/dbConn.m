@@ -10,6 +10,6 @@ function conn = dbConn()
     if isfile(fullfile(userpath(),'getCustomDBConn.m'))
         conn = getCustomDBConn();
     else
-        conn = database('Raman DB','','');
+        conn = database('TRRaman DB','','');
     end
 end
