@@ -1,5 +1,5 @@
 %% Load non-phonon removed raw data
-conn = database('Raman DB','','');
+conn = dbConn();
 
 % pH 13 and 14 phosphate data acquired in fall 2022
 dataList = conn.fetch(strjoin(...
@@ -99,7 +99,7 @@ tr.export(fullfile(savePath,'example_pH13_pH14_phononRmvd_Igor.mat'),'kinetics',
 
 %% Export data to database--Run first and double check stage tables!!!
 % Establish ODBC connection to data source defined above
-conn = database('Raman DB', '','');
+conn = dbConn();
 savePath = fullfile(repoPath(),'CukResearchGroup','Software','Acquisition and Processing Software','Examples','TR-VIS','Procd','Files and Scripts','22_11_16Nov pH 13 14 example','Procd Data');
 
 % assign foreign key values
