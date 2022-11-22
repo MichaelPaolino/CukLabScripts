@@ -1,19 +1,20 @@
-function cRepoPath = getCustomRepoPath()
-% GETCUSTOMREPOPATH causes repoPath() to return a custom repository path. 
-% Modify this file if do not wish to use the default repository path that 
-% ships with CukLabScripts. This may be useful if you have a local copy of 
-% the repository that is set up to periodically synchronize with the full 
-% data repository.
+function conn = getCustomDBConn()
+% GETCUSTOMDBCONN causes dbConn() to return a custom database connection. 
+% Modify this file if do not wish to use the default database connection
+% that ships with CukLabScripts. This may be useful if you do not have MS
+% Access ODBC connection capabilities, such as on a macOS.
 %
-% To use getCustomRepoPath(), place this function in your MATLAB user
+% To use getCustomDBConn(), place this function in your MATLAB user
 % folder, returned by userpath() and typically located under 
-% %USERPROFILE%\Documents\MATLAB. Modify the cRepoPath to correspond to
-% your custom repository path
+% %USERPROFILE%\Documents\MATLAB. Modify the conn variable to return a
+% custom database connection.
 %
-% cRepoPath = getCustomRepoPath()
-%   Returns a custom repository path.
+% conn = getCustomDBConn()
+%   Returns a custom database connection.
 %
-% See Also: repoPath, userpath
+% See Also: database, dbConn, userpath
 
 % Modify path below for your custom repository path
-cRepoPath = 'G:\.shortcut-targets-by-id\1O21NYESEEKxBx8k6l21vr3Feo26hcErZ';
+db_path = fullfile(filesep,'Users','suryansh','Work','CUB','TC research group','Data','New Data','Raman.accdb');
+url = ['jdbc:ucanaccess://' db_path];
+conn = database('','','','net.ucanaccess.jdbc.UcanaccessDriver',url);

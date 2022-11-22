@@ -152,3 +152,9 @@ assert(all(tf==[1,0,1]'),'Absolute Path Failed');
 
 tf = isAbsolutePath('/asdf\asdf\asdf');
 assert(tf,'Absolute Path Failed');
+
+%% convertPaths.m
+% todo: write assert statements...
+pathOut = convertPaths('/Users/Raman/Documents/LabVIEW Code/RamanProgram/Raman-OOP/Scripts/MATLAB/MATLAB Data API');
+pathOut = convertPaths('/Users/Raman/Documents/LabVIEW Code/RamanProgram/Raman-OOP/Scripts/MATLAB/MATLAB Data API');
+pathOut = convertPaths(repmat({'/Users/Raman/Documents/LabVIEW Code/RamanProgram/Raman-OOP/Scripts/MATLAB/MATLAB Data API'},3,2));
