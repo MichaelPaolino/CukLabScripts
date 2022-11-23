@@ -16,16 +16,29 @@ function fkStruct = genFKStruct(fkCol, pkTable, pkCol, varargin)
 %   information in the primary key table
 %
 % fkStruct = genFKStruct(fkCol, pkTable, pkCol, pkDispCol, pkDispVal);
-%   Generates a struct with fields fkTable, fkCol, pkTable, pkCol,
-%   pkDispCol, and pkDispVal. Use the struct as an input for dbCommit.
-%   Inputs can be cell arrays of char or char array. When inputs are cell
-%   arrays, this function returns a struct array the same size as the input
-%   cell array. Any singleton inputs are expanded to match the size of the
-%   largest cell array. Mixed cell/char array inputs are allowed.
+%   Generates a struct with fields fkTable, fkCol, pkTable, pkCol, and 
+%   WHERE. WHERE is generated from pkDispCol and pkDisp val:
+%   WHERE DispCol = pkDispValUse
+%   If this WHERE does not return unique records, use the explicitly set
+%   WHERE described below. 
 %
-% todo: add WHERE clause option
+%   Use the struct as an input for dbCommit. In this function, Inputs can 
+%   be cell arrays of char or char array. When inputs are cell arrays, this 
+%   function returns a struct array the same size as the input cell array. 
+%   Any singleton inputs are expanded to match the size of the largest cell
+%   array. Mixed cell/char array inputs are allowed. 
 %
-% See Also: TRANSIENTSPECTRA, DBCOMMIT
+% fkStruct = genFKStruct(fkCol, pkTable, pkCol, WHEREl);
+%   Generates a struct with fields fkTable, fkCol, pkTable, pkCol, and 
+%   WHERE. Use this function call for a custom WHERE statement when the 
+%   regular call above would returns multiple records. Use the struct as an
+%   input for dbCommit. Inputs can be cell arrays of char or char array. 
+%   When inputs are cell arrays, this function returns a struct array the 
+%   same size as the input cell array. Any singleton inputs are expanded 
+%   to match the size of the largest cell array. Mixed cell/char array 
+%   inputs are allowed.
+%
+% See Also: dbStageSave, TRANSIENTSPECTRA
     
     % parse varargin for user input
     switch nargin

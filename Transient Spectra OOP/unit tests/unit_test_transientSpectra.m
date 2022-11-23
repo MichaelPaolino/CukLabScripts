@@ -70,8 +70,6 @@ assert(all(size(myTS(1).spectra.data)==[1340,19,2,1,5]),'Failied to return corre
 assert(myTS(1).gPos == 400,'Failed to return correct grating position');
 assert(myTS(2).gPos == 400,'Failed to return correct grating position');
 
-
-
 %% Class conversion tests
 % Class conversion tests
 myFSRS = fsrs('22-10-21_10h07m42s_MeOH_Fluence_8p75_uJ,_initial_methanol_FSRS_spectrum','loadType','tsObj');
@@ -79,6 +77,8 @@ myTS = transientSpectra(repmat(myFSRS,5,1));
 
 figure; myFSRS.plotSpectra();
 figure; myTS.plotSpectra();
+
+
 
 %% All tests pass
 disp('All tests passed!');
