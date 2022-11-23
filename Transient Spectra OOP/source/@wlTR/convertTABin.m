@@ -36,5 +36,5 @@ function obj = convertTABin(obj,filePath)
     [~,fileName] = fileparts(filePath);
     obj.name = filePath;
     obj.shortName = fileName;
-    obj.description = expSet.description;
+    obj.description = char(expSet.description);
 end

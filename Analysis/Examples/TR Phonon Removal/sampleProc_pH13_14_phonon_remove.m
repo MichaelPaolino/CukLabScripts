@@ -110,14 +110,14 @@ procdTable = tr(:,1).dbStageSave(conn,'TRProcd',...
                                 'path',savePath,...
                                 'prefix','Example',...
                                 'fkStruct',fkCols);
-                            %   'update',[168 169]);    %Use this line when updating the database instead of inserting
+                                %'update',[168 169]);    %Use this line when updating the database instead of inserting
 
 % phonon removed data
 procdTablePR = tr(:,2).dbStageSave(conn,'TRPhononRemoved',...
                                 'path',savePath,...
                                 'prefix','Example',...
                                 'fkStruct',fkCols);
-                            %   'update',[120 121]);    %Use this line when updating the database instead of inserting
+                                %'update',[120 121]);    %Use this line when updating the database instead of inserting
 
 %% Save and commit data--Run only after double checking stage tables!!
 [commitTable, IDStr] = tr(:,1).dbCommitSave(conn,procdTable);
@@ -127,5 +127,17 @@ procdTablePR = tr(:,2).dbStageSave(conn,'TRPhononRemoved',...
 disp(IDStr);
 disp(IDStrPR);
 
-% Close the ODBC connection
+%% Export commited data to associative tables--Run first and double check stage tables!!!
+[assocStage, assocView] = tr(:,1).dbStageAssoc(conn,'assocTRAcquisitionProcd','TRAcquisition','TRProcd',commitTable);
+[assocStagePR, assocViewPR] = tr(:,2).dbStageAssoc(conn,'assocTRAcquisitionPhononRemoved','TRAcquisition','TRPhononRemoved',commitTablePR);
+
+%%  Commit associative data--Run only after double checking stage tables!!
+[assocCommit, IDStrAssoc] = tr(:,1).dbCommitAssoc(conn, assocStage);
+[assocCommitPR, IDStrAssocPR] = tr(:,2).dbCommitAssoc(conn, assocStagePR);
+
+% display the IDs that were generated so that the user can copy/paste them into the dbStageSave 'update' arguments 
+disp(IDStrAssoc);
+disp(IDStrAssocPR);
+
+%% Close the ODBC connection
 conn.close

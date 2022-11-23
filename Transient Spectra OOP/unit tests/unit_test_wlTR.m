@@ -269,6 +269,48 @@ assert(all(size(myTR)==[1,1]), 'merge over gPos produced the wrong number of obj
 assert(myTR.sizes.nRpts == 4 && myTR.sizes.nGPos == 2, 'merge over gPos produced the wrong number of repeats and grating positions');
 figure; myTR.plotSpectra('delays',100,'average',false);
 
+%% Check that merge correctly updates name property
+dataCell = {'19-12-05_14h53m12s_0p04Fl_0V_pH13_100mM_460nm_cont_0-2ns_spol','pH 13 460';...    
+            '19-12-05_13h56m05s_0p04Fl_0V_pH13_100mM_630nm_cont_0-2ns_spol','pH 13 630'};
+        
+myTR = wlTR(dataCell(:,1),'loadType','bin','shortName',dataCell(:,2));
+myTR = myTR.merge('gPos');
+
+assert(numel(myTR.name)==2, 'merge filename failed');
+
+%% Database tests--do not use on production database!
+isConnValid = true;
+try
+    conn= database('Raman DB','','');
+catch ME
+    isConnValid = false;
+end
+
+if isConnValid
+    % Load merge data
+    dataCell = {'19-12-05_14h53m12s_0p04Fl_0V_pH13_100mM_460nm_cont_0-2ns_spol','pH 13 460';...    
+            '19-12-05_13h56m05s_0p04Fl_0V_pH13_100mM_630nm_cont_0-2ns_spol','pH 13 630'};
+        
+    myTR = wlTR(dataCell(:,1),'loadType','bin','shortName',dataCell(:,2));
+    myTR = myTR.merge('gPos');
+    
+    % Stage save
+    procdTable = myTR.dbStageSave(conn,'TRProcd','update',172);    %Use this line when updating the database instead of inserting
+    % normally there would be a new section allowing user to check results
+    
+    % Commit save
+    [commitTable, IDStr] = myTR.dbCommitSave(conn,procdTable);
+    
+    % Stage assoc test with normal column names and order
+    [assocStage, assocView] = myTR.dbStageAssoc(conn,'assocTRAcquisitionProcd','TRAcquisition','TRProcd',commitTable);
+    
+    % Stage assoc test with weird col names and reversed order
+    [assocStage2, assocView2] = myTR.dbStageAssoc(conn,'assocTRAcquisitionProcd','TRAcquisition','TRProcd',commitTable,'colOrder',[1,3,2]);
+    
+    % Close connection
+    close(conn);
+   
+end
 %% All tests pass
 disp('All tests passed!');
 
