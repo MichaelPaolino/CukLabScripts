@@ -190,10 +190,8 @@ classdef wlTR < transientSpectra
            % Parse arguemnts, results will be in p.Results
            p.parse(varargin{:});
            
-           % Setup a griddedInterpolant object with user defined interpolation and extrapolation
+           % Setup a griddedInterpolant object
            F = griddedInterpolant();
-           F.Method = p.Results.interp;
-           F.ExtrapolationMethod = p.Results.extrap;
            
            % Assign external chirp parameters
            if ~isempty(p.Results.chirpParams)
@@ -253,6 +251,11 @@ classdef wlTR < transientSpectra
                    % Update grid vectors, values, and evaluate on new grid
                    F.GridVectors = {l(:,ii), t(:,ii)};    %set interpolant grid
                    F.Values = s(:,:,ii);                  %set interpolant values
+                   
+                   %Update with user defined interpolation and
+                   %extrapolation (required here for MATLAB 2020a)
+                   F.Method = p.Results.interp;
+                   F.ExtrapolationMethod = p.Results.extrap;
                    
                    % Define the new interpolation grid and evalaute interpolant
                    
