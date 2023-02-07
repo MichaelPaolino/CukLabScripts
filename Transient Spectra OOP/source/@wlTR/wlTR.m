@@ -102,7 +102,6 @@ classdef wlTR < transientSpectra
    
    % Data correction and manipulation methods
    methods
-       
        function obj = setChirp(obj, chirpFit)
         % SETCHIRP sets the chirp parameters for every element in the object array.
         % This method accepts a *.mat file with a variable called chirpFit or a
@@ -191,10 +190,8 @@ classdef wlTR < transientSpectra
            % Parse arguemnts, results will be in p.Results
            p.parse(varargin{:});
            
-           % Setup a griddedInterpolant object with user defined interpolation and extrapolation
+           % Setup a griddedInterpolant object
            F = griddedInterpolant();
-           F.Method = p.Results.interp;
-           F.ExtrapolationMethod = p.Results.extrap;
            
            % Assign external chirp parameters
            if ~isempty(p.Results.chirpParams)
@@ -255,6 +252,11 @@ classdef wlTR < transientSpectra
                    F.GridVectors = {l(:,ii), t(:,ii)};    %set interpolant grid
                    F.Values = s(:,:,ii);                  %set interpolant values
                    
+                   %Update with user defined interpolation and
+                   %extrapolation (required here for MATLAB 2020a)
+                   F.Method = p.Results.interp;
+                   F.ExtrapolationMethod = p.Results.extrap;
+                   
                    % Define the new interpolation grid and evalaute interpolant
                    
                    % Define a new delay axis for each wavelength as a matrix first
@@ -288,39 +290,43 @@ classdef wlTR < transientSpectra
        end
        
        function [obj,chirpFit] = fitChirp(obj,varargin) 
-        % FITCHIRP attempts to extract the white light continuum group delay as a 
-        % function of wavelength. The group delay is approximated with a polynomial
-        % function (default: 5th order). The ideal data set is a high fluence OC 
-        % spectra with finely spaced delay points (~100 fs) with a range of 
-        % +/- 2 ps around t0.
-        %
-        % This method works by fitting a specified delay range (Default, -2 to 2 ps)
-        % to an erf sigmoid for every wavelength in the dataset. The sigmoid's 
-        % center vs. wavelength is then fit to a polynomial of specified order 
-        % (default: 5th order).
-        %
-        % obj = obj.FITCHIRP()
-        %   Extracts the WLC group delay vs. wavelength and fits the data to a 5th
-        %   order polynomial.
-        %
-        % obj = obj.FITCHIRP(varargin)
-        %   Extracts the WLC group delay vs. wavelengths and fits to a polynomial
-        %   with the additional name-value pair options.
-        %
-        % [obj, chirpParam] = obj.FITCHIRP(__)
-        %   Additionally returns array of size [polyOrder, objSize].
-        %
-        % Name-value pairs:
-        %   'wavelengths': (double array) an array of wavelengths to subset the
-        %      spectra to help speed up fitChirp. Default is to use all
-        %      wavelengths.
-        %   'delays': (double array) [lower, upper] a 1x2 array of delays to trim
-        %      that limits the sigmoid fit range. Default is -2 to 2 ps.
-        %   'order': (int) an integer > 0 that specifies the polynomial order of
-        %      the group delay vs. wavelength. The default order is 5.
-        %
-        % See Also: CORRECTCHIRP, FINDT0, CORRECTT0, LSQFITSIGMOID,
-        % POLYFIT, POLYVAL
+% FITCHIRP attempts to extract the white light continuum group delay as a 
+% function of wavelength. The group delay is approximated with a polynomial
+% function (default: 5th order). The ideal data set is a high fluence OC 
+% spectra with finely spaced delay points (~100 fs) with a range of 
+% +/- 2 ps around t0.
+%
+% This method works by fitting a specified delay range (Default, -2 to 2 ps)
+% to an erf sigmoid for every wavelength in the dataset. The sigmoid's 
+% center vs. wavelength is then fit to a polynomial of specified order 
+% (default: 5th order).
+%
+% obj = obj.FITCHIRP()
+%   Extracts the WLC group delay vs. wavelength and fits the data to a 5th
+%   order polynomial.
+%
+% obj = obj.FITCHIRP(varargin)
+%   Extracts the WLC group delay vs. wavelengths and fits to a polynomial
+%   with the additional name-value pair options.
+%
+% [obj, chirpParam] = obj.FITCHIRP(__)
+%   Additionally returns array of size [polyOrder, objSize].
+%
+% Name-value pairs:
+%   'wavelengths': (double array) an array of wavelengths to subset the
+%      spectra to help speed up fitChirp. Default is to use all
+%      wavelengths.
+%   'delays': (double array) [lower, upper] a 1x2 array of delays to trim
+%      that limits the sigmoid fit range. Default is -2 to 2 ps.
+%   'order': (int) an integer > 0 that specifies the polynomial order of
+%      the group delay vs. wavelength. The default order is 5.
+%   'fitFun': (function handle) A custom function handle to fit the t0 with
+%       of the form: t0 = f(x,y). The default is the third element of 
+%       lsqFitSigmoid.
+%   'showPlot': (logical) Display fit result plots. Default is true.
+%
+% See Also: CORRECTCHIRP, FINDT0, CORRECTT0, LSQFITSIGMOID,
+% POLYFIT, POLYVAL
            
            % Format object array dims into a column for easy looping
            objSize = size(obj);
@@ -333,6 +339,8 @@ classdef wlTR < transientSpectra
            p.addParameter('wavelengths', []);
            p.addParameter('delays', [-2,2]);
            p.addParameter('order',5);
+           p.addParameter('fitFun',@(x,y) sum(lsqFitSigmoid(x, y).*[0,0,1,0]), @(p) isa(p,'function_handle'));
+           p.addParameter('showPlot',true,@(l) islogical(l));
            
            % Parse arguemnts, results will be in p.Results
            p.parse(varargin{:});
@@ -377,8 +385,13 @@ classdef wlTR < transientSpectra
                    % Update waitbar
                    waitbar(wlInd/length(wl),f);
                    
+                   % Runs the fit function. By default this is lsqFitSigmoid, 
+                   % which fits data to y = a+b*0.5*(1+erf(sqrt(0.5)*(x-x0)/s));
+                   % and returns the third element of fp, [a, b, x0, s]
+                   myFP(wlInd,:) = p.Results.fitFun(t, data(wlInd,:));
+                   
                    % Do the least squares fit using the lsqsigmoid fit
-                   myFP(wlInd,:) = lsqFitSigmoid(t, data(wlInd,:));
+                   %myFP(wlInd,:) = lsqFitSigmoid(t, data(wlInd,:));
                end
                
                % Once the sigmoid fit is done, find the chirp parameters
@@ -387,18 +400,19 @@ classdef wlTR < transientSpectra
                obj(objInd).chirpParams = chirpFit(:,objInd);
                
                % Plot resuls
-               % todo: make an option to display (and possibly log?) results
-               figure;
-                    contour(wl,t,data',25);
-                    hold on;
-                    p1 = plot(wl,myFP(:,3),'r','DisplayName','sigmoid t0');
-                    p2 = plot(wl,polyval(chirpFit(:,objInd),wl),'k--','DisplayName','polynomial');
-                    hold off;
-                    
-               xlabel('Wavelength (nm)');
-               ylabel('Delay (ps)');
-               legend([p1,p2]);
-               colorbar();
+               if p.Results.showPlot
+                   figure;
+                        contour(wl,t,data',25);
+                        hold on;
+                        p1 = plot(wl,myFP(:,3),'r','DisplayName','sigmoid t0');
+                        p2 = plot(wl,polyval(chirpFit(:,objInd),wl),'k--','DisplayName','polynomial');
+                        hold off;
+
+                   xlabel('Wavelength (nm)');
+                   ylabel('Delay (ps)');
+                   legend([p1,p2]);
+                   colorbar();
+               end
            end
            
            close(f);
@@ -407,213 +421,221 @@ classdef wlTR < transientSpectra
            obj = reshape(obj,objSize);
            chirpFit = reshape(chirpFit, [p.Results.order+1,objSize]);
        end
-
-       function ConcatObj = concatData(obj,varargin)
-% CONCATDATA merges ultrafast data with longtime data
-% output is an object comprising of data concatenated along the
-% delay axis. This function mimics the functionality of merge
-% method but applies it to the delay axis. 
-% *Requirements for the data*
-% 1. Data must be in *2 rows or columns*, corresponding to
-% ultrafast and longtime respectively, same number of datasets in
-% each column or row is required, if input object is of 2*2 dimensions
-% then make sure the data in one row correspond to only longtime and the other only ultrafast
+       
+       function [obj, phononFits] = removePhonons(obj, varargin)
+% REMOVEPHONONS fits and removes CAWs oscillations in the spectra.
+% This method stores the fit results as a STOCAWs object, which contains
+% the model published in: https://doi.org/10.1021/jacs.1c04976
 %
-% 2. All data sets in the object must be pruned, averaged, and
-% stitched properly, to make sure that the gPos, rpts, and
-% Schemes dimensions are 1, this reduces the dimension of the spectra
-% variable to 2D making concatenation easier
-% 
-% 3. Data in 1 column or row must correspond to the data in the other column
+% This method works by:
+% 1. Trimming each spectrum to a representative wavelength/delay range free
+%   of artifact
+% 2. Using SVD to remove the first two components from each spectrum,
+%   thereby leaving the CAWs oscillations
+% 3. Using a global nonlinear fit to fit a trimmed version of the remaining
+%   spectrum to a STOCAWs model
+% 4. Evaluating the best fit STOCAWs model on the untrimmed wavelength and
+%   delays and subtracting the model from the full spectrum
 %
-% ConcatObj = obj.concat(concatMethod); Returns a wlTRC object with the
-% scaling factor as properties of the object
-% 
+% The six free parameters in the fit are strain magnitude, spatial extent, 
+% formation time, an exponential coherence decay, and a 2-parameter linear
+% correction to the wavelength axis.
 %
-% Implemented concatMethod keywords:
-% 'Single' Concatenates the two corresponding datasets using only 1 scaling
-% factor computed by comparing spectra at the time delay of
-% concatenation
+% Notes: 
+% -For the best fit, run this method right after pruning the data. 
+% -Do not perform any interpolation (e.g. interp, stitch, correctChirp) or 
+% smoothing of the data before running this method. Interpolation and 
+% smoothing can destory CAWs phase information. 
+% -This method fits grating positions seperately, but averages over repeats
+% before fitting. The returned object will still contain its original
+% repeats and grating positions.
+% -This method requires an accurate chirp fit in the object data (without 
+% running chirp correction). Use setChirp or fitChirp to set the parameters
+% -CAWs early-time dynamics are approximated by params 'fwhm', 'xiGuess', 
+% and 't0Guess'. See below and STOCAWs.M for more detail.
 %
-% 'Multi' Concatenates the two corresponding datasets using an
-% average scaling factor. The method compares spectra at all
-% common time delay points and averages all those scaling factors
-% and uses it to scale the data sets and then concatenates them.
+% [obj, phononFits] = obj.removePhonons(varargin)
+%   Fits and subtracts the CAWs phonon contribution for each object element
+%   in obj. This method returns the phonon removed spectra in obj as well
+%   as their best-fit STOCAWs object, which contains all fit paramters
+%   except the wavelength correction.
+%   
+% This method can be called with name-value pair options:
+%   'wlRange' [2,1] wavelength sub-range in nm to fit. Default is [375,700]
+%   'tRange' [2,1] delay sub-range in psto fit. Default is [25,1000]
+%   't0Fun' a custom function handle of the form t0 = f(x,y) for
+%       determining t0. The default calls lsqFitExpGrow.
+%   'wlRef' (scalar) the reference wavelength in nm for determining t0 and 
+%       the t = 0 ps wavelength of the chirp polynomial. Default is 540 nm.
+%   'fwhm' (scalar) the pump intensity fwhm duration in ps, default is
+%       0.4 ps.
+%   't0Guess' (scalar) guess for the CAWs formation time, default is 1.2 ps
+%   'xiGuess' (scalar) guess for the CAWs spatial extent, default is 12 nm
+%   'showPlots' (logical) Display diagnostic plots. Default is true.
+%   'nStarts' (scalar) Number of starts for multistart. Default is 5.
 %
-% 'None' Concatenates the two data sets without any scaling,
-% should be used for comparisons if/when Single or Multi modes are
-% misbehaving
+% See Also: STOCAWs, fitChirp, setChirp, lsqFitExpGrow
 
-          % 1. Asserts that the obj array is of 2*n and reshapes if needed
-          objSizeOr = size(obj);
-          if objSizeOr(1) ~= 2
-              obj = obj';
-          end
-
-          objSize = size(obj); % Updates object size to be 2*n
-
-          % 2. Make sure that the first row is longtime data and the
-          % second row is ultrafast
-          if max(obj(1,1).delays) < 5000 % Checks if first row of object is ultrafast
-                obj([1 2],:) = obj([2 1],:); % Switches the rows if first row of object is ultrafast
-          end
-
-          % 3. Trim all data sets to appropriate wavelength range & Interpolate pairs of data sets on the same wavelength axis 
-
-          obj = obj.trim('wavelengths',[375 700]);
-
-          for ii = 1:objSize(2)
-                l = obj(1,ii).wavelengths.data; % Extract wavelengths axis from longtime data
-                obj(2,ii) = obj(2,ii).interp('wavelengths',l); % Interpolate the ultrafast data onto the longtime data axis
-          end
-
-          % 4. Check if using 'Single' or 'Multi' or 'None' case,
-          % isolate the pairs of spectra to be used to find the scaling factors in
-          % approprtiate variables, scale the longtime data to the
-          % ultrafast data, and trim the longtime data appropriately
-          if isempty(varargin)
-              varargin{1} = 'None';
-          end
-
-          all_sf = cell(1,objSize(2));
-          avg_sf = zeros(1,objSize(2));
-          l_range = [375 600]; % limits the spectral wavelength range in order to reduce the contribution of noise in the scaling factor calculation
-          l_range_ind = zeros(1,2);
-
-          for ii = 1:objSize(2)
-
-              switch varargin{1}
-
-                  case 'Single'
-                      % Uses scaling factor at only the delay point of concatenation
-                      t_conc = max(obj(2,ii).delays.data); % Find point of concatenation
-                      [~,t_conc_ind_l] = min(abs(t_conc-obj(1,ii).delays.data)); % Find index of point of concatenation in the longtime delay axis
-
-                      [~,l_range_ind(1)] = min(abs(l_range(1)-obj(1,ii).wavelengths.data)); % Find index of wavelength range
-                      [~,l_range_ind(2)] = min(abs(l_range(2)-obj(1,ii).wavelengths.data)); % Find index of wavelength range
-
-                      long = obj(1,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_conc_ind_l,:,:,:); % Spectra from longtime data
-                      short = obj(2,ii).spectra.data(l_range_ind(1):l_range_ind(2),end,:,:,:); % Spectra from ultrafast data
+           % Format object array dims into a column for easy looping
+           objSize = size(obj);
+           objNumel = numel(obj);
+           obj = obj(:);
+           
+           % parse inputs
+           p = inputParser();
+           p.FunctionName = 'removePhonons';
+           p.addParameter('wlRange', [375,700], @(d) isvector(d) && numel(d)==2);
+           p.addParameter('tRange', [25,1000], @(d) isvector(d) && numel(d)==2);
+           p.addParameter('t0Fun', @(x,y) sum(lsqFitExpGrow(x, y).*[0,0,0,0,0,1]), @(p) isa(p,'function_handle'));
+           p.addParameter('wlRef',540,@(d) isscalar(d));
+           p.addParameter('fwhm',0.4,@(d) isscalar(d) && d>=0);
+           p.addParameter('t0Guess',1.2,@(d) isscalar(d) && d>=0);
+           p.addParameter('xiGuess',12,@(d) isscalar(d) && d>=0);
+           p.addParameter('showPlots', true, @(l) islogical(l) && isscalar(l));
+           p.addParameter('nStarts', 5, @(d) isscalar(d));
+           p.parse(varargin{:});
+           
+           % initialize output
+           phononFits = cell(objNumel,1);
+           
+           % assert the same scheme exists
+           schInd = 1;
+           
+           % Start waitbar
+           [~,idx] = obj.getUniqueLabels('gPos');
+           nSets = sum(idx,'all');
+           ctr = 0;
+           f = waitbar(ctr/nSets, sprintf('Removing phonons for gPos %d of %d for object %d of %d.',0,obj(1).sizes.nGPos,0,objNumel));
+           
+           % Loop over objects
+           for objInd = 1:objNumel
+               %remember old units
+               tmpUnits = cell(3,1);
+               [tmpUnits{:}] = obj(objInd).getUnits();
+               
+               % initialize suboutput
+               phononFits{objInd} = cell(obj(objInd).sizes.nGPos,1);
+               
+               % Correct t0 at known position to pass onto fit function
+               subObj = obj(objInd).average('rpts');
+               [subObj, t0Ar] = subObj.findT0('wlAr',p.Results.wlRef,'fitFun',p.Results.t0Fun);
+               subObj = subObj.correctT0();
+               
+               % trim and average over repeats to fit a subset of data
+               subTrmd = subObj.trim('wavelengths',p.Results.wlRange,'delays',p.Results.tRange);
+               
+               % loop over grating positions
+               for gInd = 1:subObj.sizes.nGPos
+                   % Update waitbar
+                   waitbar(ctr/nSets, f, sprintf('Removing phonons for gPos %d of %d for object %d of %d.', gInd,subObj.sizes.nGPos, objInd, objNumel));
+                   ctr = ctr+1;
+                   
+                   % get numeric spectra trimmed data for the grating position
+                   % getNumeric also removes NaN values, important for SVD
+                   [s,l,t] = getNumeric(subTrmd.getLabel('gPos',gInd));
+                                     
+                   % Use SVD to remove 1st two components--removes emissive/absorptive dynamics and 
+                   % keeps phonon oscillations
+                   [U,S,V] = svd(s);
+                   M = s-U(:,1:2)*S(1:2,1:2)*V(:,1:2)';
+                   
+                   % Phonon model OOP constructor
+                   fm = STOCAWs(l,t,subTrmd.chirpParams,p.Results.wlRef,p.Results.fwhm);
+                   
+                   % Set guess parameters for spatial extent and formation time
+                   xg = p.Results.xiGuess;
+                   t0g = p.Results.t0Guess;
+                   
+                   % Set early-time CAWs formation parameters as guess parameters
+                   fm.xiGuess = xg;
+                   fm.t0Guess = t0g;
+                   
+                   % Setup initial guess fit parameters and bounds. l0 and l1 are a 
+                   % linear correction to the spectrometer calibration. eta0 is the 
+                   % strain amplitude, xi is the spatial extent, t0 is the formation time,
+                   % and tau is a CAWs coherence decay constant modelling spectrometer
+                   % resolution and acoustic damping.
+                             %l0,  l1,  eta0,  xi,  t0,  tau
+                   myGuess = [0,   1,   1e-3,  xg,  t0g, 1000];
+                   typicalX= [1,   1,   1e-3,  5,   1,   500];
+                   myLB =    [-10, 0.9, 0,     0,   0,   0];
+                   myUB =    [10,  1.1, 0.1,   100, 10,  1e6]; 
+                   
+                   % Setup MultiStart optimization with lsqnonlin and tight convergence criteria
+                   opts = optimoptions(@lsqnonlin,'FunctionTolerance',1e-9,'MaxFunctionEvaluations',2000,'MaxIterations',2000,'Display','off','TypicalX',typicalX);
                     
-                      all_sf{1,ii} = (short'*long)/(long'*long); %Scaling factor to normalize longtime data to ultrafast data
+                   problem = createOptimProblem('lsqnonlin',...
+                       'objective', @(fp) fm.evalMslp(fp(1)+fp(2)*l, fp(3), fp(4), fp(5), fp(6))-M,...
+                       'x0',myGuess,'lb',myLB,'ub',myUB,'options',opts);
+                   
+                   % Run MultiStart solver
+                   myFP = run(MultiStart,problem,p.Results.nStarts);
+                   
+                   % Update fitModel to the best solution
+                   [~,fm] = fm.evalMslp(myFP(1)+myFP(2)*l, myFP(3), myFP(4), myFP(5), myFP(6));
+                   
+                   % Update phononFits
+                   phononFits{objInd}{gInd} = fm;
+                   
+                   % Remove phonons and update object data
+                   for rInd = 1:obj(objInd).sizes.nRpts
+                      % Correct both wavelengths and t0 in obj
+                      obj(objInd).spectra.data(:,:,rInd,gInd,schInd) = ...
+                                obj(objInd).spectra.data(:,:,rInd,gInd,schInd) - ...
+                                fm.evalMlt(myFP(1)+myFP(2)*obj(objInd).wavelengths.data(:,gInd),...
+                                    obj(objInd).delays.data(:,rInd,gInd)-t0Ar{1}(:,:,gInd));
+                   end
+                   
+                   % Plot results
+                   if p.Results.showPlots
+                       % get numeric spectra untrimmed data for current grating position
+                       sFull = subObj.spectra.data(:,:,1,gInd,1);
+                       lFull = subObj.wavelengths.data(:,gInd);
+                       tFull = subObj.delays.data(:,1,gInd);
 
-                      avg_sf(1,ii) = all_sf{1,ii}; 
-
-                      obj(1,ii).spectra.data = avg_sf(1,ii)*obj(1,ii).spectra.data; % Scaling longtime data
-
-                      obj(1,ii) = obj(1,ii).trim('delays',[t_conc,max(obj(1,ii).delays.data)]); % Trim the longtime data, removes all delay points until point of concatenation
-
-%                       obj(1,ii).spectra_std.data = rmmissing((sqrt(avg_sf))*obj(1,ii).spectra_std.data(:,t_conc_ind_l:end,:,:,:)); % Trim the spectra_std of the scaled longtime data
-
-                      obj(1,ii).description = [obj(1,ii).description ' Concatenated using 1 scaling factor at point of concatenation']; % Updates description to indicate the method of concatenation
-                      
-                  case 'Multi'
-                      % Uses scaling factors from all common time delays
-                      % greater than zero
-                      t_conc = max(obj(2,ii).delays.data); % Find point of concatenation
-                      [~,t_conc_ind_l] = min(abs(t_conc-obj(1,ii).delays.data)); % Find index of point of concatenation in the longtime delay axis
-
-                      [~,l_range_ind(1)] = min(abs(l_range(1)-obj(1,ii).wavelengths.data)); % Find index of wavelength range
-                      [~,l_range_ind(2)] = min(abs(l_range(2)-obj(1,ii).wavelengths.data)); % Find index of wavelength range
-
-                      t_l = obj(1,ii).delays.data(1:t_conc_ind_l); % Obtain longtime delays until the point of concatenation
-                      temp = find(t_l<1500);
-                      t_l(temp) = []; % Drop the time delay points smaller than 1500 ps, Since the pulse duration of the longtime pump is ~1ns, spectral comparisons below 1.5ns aren't meaningful
-
-                      for kk = 1:length(t_l) % Looping over all common delays>1ps and finding scaling factors
-
-                          [~,t_l_ind] = min(abs(t_l(kk)-obj(1,ii).delays.data)); % Find index of point of concatenation in the longtime delay axis
-                          [~,t_s_ind] = min(abs(t_l(kk)-obj(2,ii).delays.data)); % Find index of point of concatenation in the ultrafast delay axis
-
-                          long = obj(1,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_l_ind,:,:,:); % Spectra from longtime data
-                          short = obj(2,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_s_ind,:,:,:); % Spectra from ultrafast data
-
-                          all_sf{1,ii}(kk,1) = (short'*long)/(long'*long); %Scaling factor to normlaize longtime data to ultrafast data
-                      end
-
-                      avg_sf(ii) = mean(all_sf{1,ii});
-
-                      obj(1,ii).spectra.data = avg_sf(1,ii)*obj(1,ii).spectra.data; % Scaling longtime data
-
-                      obj(1,ii) = obj(1,ii).trim('delays',[t_conc,max(obj(1,ii).delays.data)]); % Trim the longtime data, removes all delay points until point of concatenation
-
-%                       obj(1,ii).spectra_std.data = rmmissing((sqrt(avg_sf))*obj(1,ii).spectra_std.data(:,t_conc_ind_l:end,:,:,:)); % Trim the spectra_std of the scaled longtime data
-
-                      obj(1,ii).description = [obj(1,ii).description ' Concatenated using scaling factors from all common time points']; % Updates description to indicate the method of concatenation
-                      
-                  case 'None'
-                      % No scaling factors invloved
-                      t_conc = max(obj(2,ii).delays.data); % Find point of concatenation
-                      [~,t_conc_ind_l] = min(abs(t_conc-obj(1,ii).delays.data)); % Find index of point of concatenation in the longtime delay axis
-
-                      obj(1,ii) = obj(1,ii).trim('delays',[t_conc,max(obj(1,ii).delays.data)]); % Trim the longtime data, removes all delay points until point of concatenation
-
-%                       obj(1,ii).spectra_std.data = rmmissing(obj(1,ii).spectra_std.data(:,t_conc_ind_l:end,:,:,:)); % Trim the spectra_std of the scaled longtime data
-
-                      obj(1,ii).description = [obj(1,ii).description ' Concatenated without any scaling']; % Updates description to indicate the method of concatenation
-
-                  otherwise
-                      error([varargin{1} ' is not a valid operational scheme, try Single or Multi or None']);
-
-              end
-          end
-
-          % 4. Merge longtime data to to the ultrafast data, 2 properties
-          % need to be merged, the delays and spectra
-
-           ConcatObj(1,objSize(2)) = wlTRC(); % Output object starts off as an object of a new class to enable having scaling factors as properties
-
-           for ii = 1:objSize(2)
-
-               ConcatObj(1,ii).avg_sf = avg_sf(1,ii); % Write the average scaling factor into the new object
-
-               ConcatObj(1,ii).all_sf = all_sf{1,ii}; % Write all scaling factors into the new object
-
-               ConcatObj(1,ii).chirpParams = obj(1,ii).chirpParams; % Copy the chirpParam field
-
-               long = obj(1,ii).spectra.data; % Extract longtime data
-               short = obj(2,ii).spectra.data; % Extract ultrafast data
-
-               % Check if the dimensions of the data are correct
-               ConcatObj(1,ii).spectra.data = [short long]; % Append and input the spectra
-% 
-%                longstd = obj(1,ii).spectra_std.data; % Extract std dev of longtime data
-%                shortstd = obj(2,ii).spectra_std.data; % Extract std dev of ultrafast data
-
-               ConcatObj(1,ii).spectra_std.data = obj(1,ii).spectra_std.data; % Append and input the std dev of spectra
-
-               ConcatObj(1,ii).wavelengths = obj(1,ii).wavelengths; % Write the wavelengths into the new object
-
-               longDelay = obj(1,ii).delays.data; % Extract longtime delay axis
-               shortDelay = obj(2,ii).delays.data; % Extract ultrafast delay axis
-
-               ConcatObj(1,ii).delays.data = [shortDelay;longDelay]; % Vertical Concat the two axes and input into object
-
-               ConcatObj(1,ii).t0 = obj(1,ii).t0; % Copy t0 into object
-
-               ConcatObj(1,ii).gPos = obj(1,ii).gPos; % Copy gPos into object
-
-               ConcatObj(1,ii).name = ['Concatenated ' obj(1,ii).name]; % Write the name field
-
-               ConcatObj(1,ii).shortName = obj(1,ii).shortName; % Copy the shortName field
-
-               ConcatObj(1,ii).description = obj(1,ii).description; % Copy the description into the new object
-
-               ConcatObj(1,ii).schemes = obj(1,ii).schemes; % Copy the schemes into the new object
-
-               ConcatObj(1,ii).sizes = obj(1,ii).sizes; % Copy sizes into the new object
-
-               ConcatObj(1,ii).sizes.nDelays = size(ConcatObj(1,ii).delays.data,1);% Update delay size in object
-
+                       % Create full fitModel with full wavelengths and delays
+                       [~,fmFull] = fm.evalMlt(myFP(1)+myFP(2)*lFull,tFull);                  
+                       MFull = fmFull.M;
+                       
+                       % Plot contour of results                     
+                       figure('Name',sprintf('%s, gPos: %d',subObj.shortName,subObj.gPos(gInd)));
+                       subplot(1,4,1)
+                           [~,c] = contour(lFull,tFull,sFull',23);
+                           title('Raw');
+                           xlabel(subObj.wavelengths.dispName);
+                           ylabel(subObj.delays.dispName);
+                           
+                       subplot(1,4,3)
+                           contour(lFull,tFull,sFull'-MFull',c.LevelList);
+                           title('Raw - Phonons');
+                           xlabel(subObj.wavelengths.dispName);
+                           
+                      subplot(1,4,2)
+                           [~,c] = contour(lFull,tFull,MFull',23);
+                           title('Phonons');
+                           xlabel(subObj.wavelengths.dispName);
+                           
+                       subplot(1,4,4)
+                           contour(l,t,fm.M'-M',c.LevelList);
+                           title('Residuals');
+                           xlabel(subObj.wavelengths.dispName);
+                           ylabel(subObj.delays.dispName);
+                   end
+                   
+                   % update waitbar
+                   waitbar(ctr/nSets, f);
+               end
+               
+               % set units back to input units
+               obj(objInd) = obj(objInd).setUnits(tmpUnits{:});
            end
-
-          % 5. Transposes the ConcatObj to match the variable dimension of
-          % the initial object, i.e. if obj is n*2, concatObj is n*1 as well
-          if objSizeOr(1) ~= 2
-              ConcatObj = ConcatObj';
-          end
-
-          end
+           
+           % close waitbar
+           close(f);
+           
+           %convert object array back to original size
+           obj = reshape(obj,objSize);
+       end
 
    end
 end
