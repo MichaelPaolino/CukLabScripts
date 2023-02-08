@@ -1821,10 +1821,10 @@ classdef transientSpectra
                             case 'shift'    % shift data based on difference in overlap region
                                 shift = zeros(2,size(mid1Data,2));
                                 for ii = 1:size(mid1Data,2)
-                                    shift(1,ii) = mean(mid1Data((mid1Data(:,ii)~=0),ii));
-                                    shift(2,ii) = mean(mid2Data((mid2Data(:,ii)~=0),ii));
+                                    shift(1,ii) = mean(mid1Data(mid1Data(ii,:)~=0),ii);
+                                    shift(2,ii) = mean(mid2Data(mid2Data(ii,:)~=0),ii);
                                 end
-                                    shift = shift - mean(shift,1);
+                                    shift = shift - mean(shift,2);
                                     noshift = find(isnan(shift(1,:)).*isnan(shift(2,:)));
                                     shift(noshift,:) = zeros(length(noshift),2);
                                     
@@ -1832,7 +1832,7 @@ classdef transientSpectra
                                     mid1Data = mid1Data - shift(1,:);
                                     mid2Data = mid2Data - shift(2,:);
                                     highData = highData - shift(2,:);
-                                    midData = (mid1Data + mid2Data)/2;
+                                    midData = [
                         end
 
                         %concatonate the three regions across the 1st (pixel) dimension
