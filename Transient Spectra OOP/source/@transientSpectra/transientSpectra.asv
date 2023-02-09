@@ -1833,8 +1833,8 @@ classdef transientSpectra
                                     mid2Data = mid2Data - shift(2,:);
                                     highData = highData - shift(2,:);
                                     midData = [mid1Data, mid2Data];
-                                    midData = reshape(midData, size(midData,1), size(midData, 2)/2, 2);
-                                    midData = mean(midData, 3, 'omitnan');
+                                    reshape(midData, size(midData,1), size(midData, 2)/2, 2);
+                                    midData = mean(midData, 1, 'omitnan');
                         end
 
                         %concatonate the three regions across the 1st (pixel) dimension
