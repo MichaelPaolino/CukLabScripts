@@ -3008,9 +3008,9 @@ classdef transientSpectra
                     
                     % Add time stamp to variable names if exists in database table
                     varNames = updateTable.Properties.VariableNames;
-                    if any(strcmpi('TimeStamp',commitTable.Properties.VariableNames))
-                        varNames = [varNames, {'TimeStamp'}];
-                    end
+%                     if any(strcmpi('TimeStamp',commitTable.Properties.VariableNames))
+%                         varNames = [varNames, {'TimeStamp'}];
+%                     end
                     
                     % Escape reserved words such as Name and TimeStamp
                     % This seems to be necessary for the udpate statement
@@ -3024,10 +3024,10 @@ classdef transientSpectra
                         varValues = table2cell(updateTable(rowInd,:));
                         
                         % Add current timestamp if a timestamp column exists
-                        if any(strcmpi('TimeStamp',commitTable.Properties.VariableNames))
-                            tNow = datetime('now', 'format', 'yyyy-MM-dd HH:mm:ss'); % for db timestamp
-                            varValues = [varValues, {char(tNow)}];
-                        end 
+%                         if any(strcmpi('TimeStamp',commitTable.Properties.VariableNames))
+%                             tNow = datetime('now', 'format', 'yyyy-MM-dd HH:mm:ss'); % for db timestamp
+%                             varValues = [varValues, {char(tNow)}];
+%                         end 
                         
                         % Update record
                         conn.update(updateTable.Properties.Description,...
