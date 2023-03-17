@@ -1710,6 +1710,10 @@ classdef transientSpectra
         %       lower on the lower end of the overlap region to 100% upper on the
         %       upper end of the overlap region. The weights are 50%:50% in the
         %       middle of the overlap region.
+            'shift': data from each grating position is shifted either up or down 
+            based on whether it lies above or below the midpoint between the data 
+            in the overlap region. The amount of shift is based on the average of 
+            
         %
         % See Also: AVERAGE, INTERP, MERGE
             
@@ -1820,21 +1824,20 @@ classdef transientSpectra
                                 midData = mid1Data.*(1-weights)+mid2Data.*weights;  %this does the weighted average
                             case 'shift'    % shift data based on difference in overlap region
                                 shift = zeros(2,size(mid1Data,2));
-                                for ii = 1:size(mid1Data,2)
-                                    shift(1,ii) = mean(mid1Data((mid1Data(:,ii)~=0),ii));
-                                    shift(2,ii) = mean(mid2Data((mid2Data(:,ii)~=0),ii));
+                                for jj = 1:size(mid1Data,2)
+                                    shift(1,jj) = mean(mid1Data((mid1Data(:,jj)~=0),jj));   %average data in overlap region for each delay, 1st grating position
+                                    shift(2,jj) = mean(mid2Data((mid2Data(:,jj)~=0),jj));   %average data in overlap region for each delay, 2nd grating position
                                 end
-                                    shift = shift - mean(shift,1);
-                                    noshift = find(isnan(shift(1,:)).*isnan(shift(2,:)));
+                                    shift = shift - mean(shift,1);  %find signed difference between mean in overlap regions and the midpoint between them
+                                    noshift = find(isnan(shift(1,:)).*isnan(shift(2,:)));   %flag any NaN values
                                     shift(noshift,:) = zeros(length(noshift),2);
-                                    
-                                    lowData = lowData - shift(1,:);
+                                    lowData = lowData - shift(1,:);         % do the shift operation
                                     mid1Data = mid1Data - shift(1,:);
                                     mid2Data = mid2Data - shift(2,:);
                                     highData = highData - shift(2,:);
                                     midData = [mid1Data, mid2Data];
-                                    reshape(midData, size(midData,1), size(midData, 2)/2, 2);
-                                    midData = mean(midData, 1, 'omitnan');
+                                    midData = reshape(midData, size(midData,1), size(midData, 2)/2, 2);
+                                    midData = mean(midData, 3, 'omitnan');
                         end
 
                         %concatonate the three regions across the 1st (pixel) dimension
