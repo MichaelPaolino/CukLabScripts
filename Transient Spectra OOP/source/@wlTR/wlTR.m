@@ -705,8 +705,8 @@ classdef wlTR < transientSpectra
           end
 
           all_sf = cell(1,objSize(2));
-          avg_sf = zeros(1,objSize(2));
-          l_range = [375 600]; % limits the spectral wavelength range in order to reduce the contribution of noise in the scaling factor calculation
+          avg_sf = zeros(2,objSize(2));
+          l_range = [375 700]; % limits the spectral wavelength range in order to reduce the contribution of noise in the scaling factor calculation
           l_range_ind = zeros(1,2);
 
           for ii = 1:objSize(2)
@@ -760,7 +760,7 @@ classdef wlTR < transientSpectra
                           all_sf{1,ii}(kk,1) = (short'*long)/(long'*long); %Scaling factor to normlaize longtime data to ultrafast data
                       end
 
-                      avg_sf(ii) = mean(all_sf{1,ii});
+                      avg_sf(1,ii) = mean(all_sf{1,ii});
 
                       obj(1,ii).spectra.data = avg_sf(1,ii)*obj(1,ii).spectra.data; % Scaling longtime data
 
@@ -773,13 +773,60 @@ classdef wlTR < transientSpectra
                   case 'None'
                       % No scaling factors invloved
                       t_conc = max(obj(2,ii).delays.data); % Find point of concatenation
-                      [~,t_conc_ind_l] = min(abs(t_conc-obj(1,ii).delays.data)); % Find index of point of concatenation in the longtime delay axis
 
                       obj(1,ii) = obj(1,ii).trim('delays',[t_conc,max(obj(1,ii).delays.data)]); % Trim the longtime data, removes all delay points until point of concatenation
 
 %                       obj(1,ii).spectra_std.data = rmmissing(obj(1,ii).spectra_std.data(:,t_conc_ind_l:end,:,:,:)); % Trim the spectra_std of the scaled longtime data
 
                       obj(1,ii).description = [obj(1,ii).description ' Concatenated without any scaling']; % Updates description to indicate the method of concatenation
+
+                  case 'Offset'
+                      % Combines the Multi method with offsets
+                      t_conc = max(obj(2,ii).delays.data); % Find point of concatenation
+                      [~,t_conc_ind_l] = min(abs(t_conc-obj(1,ii).delays.data)); % Find index of point of concatenation in the longtime delay axis
+
+                      [~,l_range_ind(1)] = min(abs(l_range(1)-obj(1,ii).wavelengths.data)); % Find index of wavelength range
+                      [~,l_range_ind(2)] = min(abs(l_range(2)-obj(1,ii).wavelengths.data)); % Find index of wavelength range
+
+                      spectra_s_conc = obj(2,ii).spectra.data(l_range_ind(1):l_range_ind(2),end,:,:,:); % Finds ultrafast spectra at point of concatenation
+
+                      [~,min_ind] = min(abs(spectra_s_conc)); % Finds index of wavelength where the spectra crosses zero roughly
+                      x = [min_ind-150:min_ind+100]; % Bracket indices around the min_ind
+                      y = spectra_s_conc(min_ind-150:min_ind+100); % Isolate data for fitting around min_ind
+                      p = polyfit(x,y,1); % Fit data with a line
+                      Fit = p(1)*x + p(2); % Put the fit into a variable
+
+                      [~,min_ind] = min(abs(Fit)); 
+                      min_ind = x(min_ind); % Find index of wavelength where the linear fit of the spectra crosses zero
+
+                      offset = obj(1,ii).spectra.data(min_ind,t_conc_ind_l,:,:,:); %  Finds the offset from the longtime data
+
+                      obj(1,ii).spectra.data = obj(1,ii).spectra.data - offset; % corrects the offset from the entire longtime dataset
+
+                      t_l = obj(1,ii).delays.data(1:t_conc_ind_l); % Obtain longtime delays until the point of concatenation
+                      temp = find(t_l<1500);
+                      t_l(temp) = []; % Drop the time delay points smaller than 1500 ps, Since the pulse duration of the longtime pump is ~1ns, spectral comparisons below 1.5ns aren't meaningful
+
+                      for kk = 1:length(t_l) % Looping over all common delays>1ps and finding scaling factors
+
+                          [~,t_l_ind] = min(abs(t_l(kk)-obj(1,ii).delays.data)); % Find index of point of concatenation in the longtime delay axis
+                          [~,t_s_ind] = min(abs(t_l(kk)-obj(2,ii).delays.data)); % Find index of point of concatenation in the ultrafast delay axis
+
+                          long = obj(1,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_l_ind,:,:,:); % Spectra from longtime data
+                          short = obj(2,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_s_ind,:,:,:); % Spectra from ultrafast data
+
+                          all_sf{1,ii}(kk,1) = (short'*long)/(long'*long); %Scaling factor to normlaize longtime data to ultrafast data
+                      end
+
+                      avg_sf(1,ii) = mean(all_sf{1,ii}); avg_sf(2,ii) = offset;
+
+                      obj(1,ii).spectra.data = avg_sf(1,ii)*obj(1,ii).spectra.data; % Scaling longtime data
+
+                      obj(1,ii) = obj(1,ii).trim('delays',[t_conc,max(obj(1,ii).delays.data)]); % Trim the longtime data, removes all delay points until point of concatenation
+
+%                       obj(1,ii).spectra_std.data = rmmissing((sqrt(avg_sf))*obj(1,ii).spectra_std.data(:,t_conc_ind_l:end,:,:,:)); % Trim the spectra_std of the scaled longtime data
+
+                      obj(1,ii).description = [obj(1,ii).description ' Concatenated using scaling factors from all common time points and offset from the point of concatenation']; % Updates description to indicate the method of concatenation
 
                   otherwise
                       error([varargin{1} ' is not a valid operational scheme, try Single or Multi or None']);
@@ -794,7 +841,7 @@ classdef wlTR < transientSpectra
 
            for ii = 1:objSize(2)
 
-               ConcatObj(1,ii).avg_sf = avg_sf(1,ii); % Write the average scaling factor into the new object
+               ConcatObj(1,ii).avg_sf = avg_sf(:,ii); % Write the average scaling factor into the new object
 
                ConcatObj(1,ii).all_sf = all_sf{1,ii}; % Write all scaling factors into the new object
 
@@ -822,7 +869,7 @@ classdef wlTR < transientSpectra
 
                ConcatObj(1,ii).gPos = obj(1,ii).gPos; % Copy gPos into object
 
-               ConcatObj(1,ii).name = ['Concatenated ' obj(1,ii).name]; % Write the name field
+               ConcatObj(1,ii).name = ['Concatenated ' strrep(obj(1,ii).name,'_',' ')]; % Write the name field
 
                ConcatObj(1,ii).shortName = obj(1,ii).shortName; % Copy the shortName field
 
