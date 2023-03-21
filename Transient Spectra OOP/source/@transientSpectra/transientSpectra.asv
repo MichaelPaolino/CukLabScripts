@@ -1710,10 +1710,10 @@ classdef transientSpectra
         %       lower on the lower end of the overlap region to 100% upper on the
         %       upper end of the overlap region. The weights are 50%:50% in the
         %       middle of the overlap region.
-        %       'shift': data from each grating position is shifted either up or down 
-        %       based on whether it lies above or below the midpoint between the data 
-        %       in the overlap region. The amount of shift is based on the average of 
-        %       all data across the overlap wavelength region for each grating postion.
+            'shift': data from each grating position is shifted either up or down 
+            based on whether it lies above or below the midpoint between the data 
+            in the overlap region. The amount of shift is based on the average of 
+            
         %
         % See Also: AVERAGE, INTERP, MERGE
             
