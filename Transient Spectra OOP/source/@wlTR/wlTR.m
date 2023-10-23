@@ -722,8 +722,10 @@ classdef wlTR < transientSpectra
                       [~,l_range_ind(2)] = min(abs(l_range(2)-obj(1,ii).wavelengths.data)); % Find index of wavelength range
 
                       long = obj(1,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_conc_ind_l,:,:,:); % Spectra from longtime data
+                      long(isnan(long)) = 1; %ignore NaN values in long by turning them into 1's
                       short = obj(2,ii).spectra.data(l_range_ind(1):l_range_ind(2),end,:,:,:); % Spectra from ultrafast data
-                    
+                      short(isnan(short)) = 1; %ignore NaN values in short by turning them into 1's
+                      
                       all_sf{1,ii} = (short'*long)/(long'*long); %Scaling factor to normalize longtime data to ultrafast data
 
                       avg_sf(1,ii) = all_sf{1,ii}; 
@@ -755,7 +757,9 @@ classdef wlTR < transientSpectra
                           [~,t_s_ind] = min(abs(t_l(kk)-obj(2,ii).delays.data)); % Find index of point of concatenation in the ultrafast delay axis
 
                           long = obj(1,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_l_ind,:,:,:); % Spectra from longtime data
+                          long(isnan(long)) = 1; %ignore NaN values in long by turning them into 1's
                           short = obj(2,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_s_ind,:,:,:); % Spectra from ultrafast data
+                          short(isnan(short)) = 1; %ignore NaN values in short by turning them into 1's
 
                           all_sf{1,ii}(kk,1) = (short'*long)/(long'*long); %Scaling factor to normlaize longtime data to ultrafast data
                       end
@@ -813,8 +817,10 @@ classdef wlTR < transientSpectra
                           [~,t_s_ind] = min(abs(t_l(kk)-obj(2,ii).delays.data)); % Find index of point of concatenation in the ultrafast delay axis
 
                           long = obj(1,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_l_ind,:,:,:); % Spectra from longtime data
+                          long(isnan(long)) = 1; %ignore NaN values in long by turning them into 1's
                           short = obj(2,ii).spectra.data(l_range_ind(1):l_range_ind(2),t_s_ind,:,:,:); % Spectra from ultrafast data
-
+                          short(isnan(short)) = 1; %ignore NaN values in short by turning them into 1's
+                          
                           all_sf{1,ii}(kk,1) = (short'*long)/(long'*long); %Scaling factor to normlaize longtime data to ultrafast data
                       end
 
