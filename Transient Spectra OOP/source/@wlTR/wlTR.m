@@ -853,18 +853,13 @@ classdef wlTR < transientSpectra
 
                ConcatObj(1,ii).chirpParams = obj(1,ii).chirpParams; % Copy the chirpParam field
 
-%                long = obj(1,ii).spectra.data; % Extract longtime data
-%                short = obj(2,ii).spectra.data; % Extract ultrafast data
                long = obj(1,ii).spectra; % Extract longtime data
                short = obj(2,ii).spectra; % Extract ultrafast data
 
                % Check if the dimensions of the data are correct
                ConcatObj(1,ii).spectra = [short long]; % Append and input the spectra
-% 
-%                longstd = obj(1,ii).spectra_std.data; % Extract std dev of longtime data
-%                shortstd = obj(2,ii).spectra_std.data; % Extract std dev of ultrafast data
               
-               ConcatObj(1,ii).spectra_std.data = obj(1,ii).spectra_std.data; % Append and input the std dev of spectra
+              ConcatObj(1,ii).spectra_std = obj(1,ii).spectra_std; % Append and input the std dev of spectra
 
                ConcatObj(1,ii).wavelengths = obj(1,ii).wavelengths; % Write the wavelengths into the new object
 
