@@ -859,20 +859,17 @@ classdef wlTR < transientSpectra
                % Check if the dimensions of the data are correct
                ConcatObj(1,ii).spectra = [short long]; % Append and input the spectra
               
-              ConcatObj(1,ii).spectra_std = obj(1,ii).spectra_std; % Append and input the std dev of spectra
+               ConcatObj(1,ii).spectra_std = obj(1,ii).spectra_std; % Append and input the std dev of spectra
 
                ConcatObj(1,ii).wavelengths = obj(1,ii).wavelengths; % Write the wavelengths into the new object
 
-%                longDelay = obj(1,ii).delays.data; % Extract longtime delay axis
-%                shortDelay = obj(2,ii).delays.data; % Extract ultrafast delay axis
                longDelay = obj(1,ii).delays; % Extract longtime delay axis
                shortDelay = obj(2,ii).delays; % Extract ultrafast delay axis
                
-%                ConcatObj(1,ii).delays.data = [shortDelay;longDelay]; % Vertical Concat the two axes and input into object
-                ConcatObj(1,ii).delays = [shortDelay;longDelay]; % Vertical Concat the two axes and input into object
+               ConcatObj(1,ii).delays = [shortDelay;longDelay]; % Vertical Concat the two axes and input into object
                
-                ConcatObj(1,ii).t0 = obj(1,ii).t0; % Copy t0 into object
-%                ConcatObj(1,ii).t0 = obj(2,ii).t0; % Copy t0 into object
+%                ConcatObj(1,ii).t0 = obj(1,ii).t0; % Copy t0 into object
+               ConcatObj(1,ii).t0 = obj(2,ii).t0; % Copy t0 into object
 
                ConcatObj(1,ii).gPos = obj(1,ii).gPos; % Copy gPos into object
 
