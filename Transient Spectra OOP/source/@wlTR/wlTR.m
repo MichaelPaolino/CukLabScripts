@@ -833,7 +833,7 @@ classdef wlTR < transientSpectra
 %                     obj(1,ii).spectra_std.data = rmmissing((sqrt(avg_sf))*obj(1,ii).spectra_std.data(:,t_conc_ind_l:end,:,:,:)); % Trim the spectra_std of the scaled longtime data
                       obj(1,ii).spectra_std.data = squeeze(obj(1,ii).spectra_std.data);
                       obj(2,ii).spectra_std.data = squeeze(obj(2,ii).spectra_std.data);
-                      obj(1,ii).spectra_std.data = (obj(1,ii).spectra_std.data(:,t_conc_ind,:));
+%                     obj(1,ii).spectra_std.data = obj(1,ii).trim( spectra_std.data(:,t_conc_ind_l:end,:);
 
                       obj(1,ii).description = [obj(1,ii).description ' Concatenated using scaling factors from all common time points and offset from the point of concatenation']; % Updates description to indicate the method of concatenation
 
@@ -863,7 +863,8 @@ classdef wlTR < transientSpectra
                ConcatObj(1,ii).spectra = [short long]; % Append and input the spectra
               
                ConcatObj(1,ii).spectra_std = obj(1,ii).spectra_std; % Append and input the std dev of spectra
-               ConcatObj(1,ii).spectra_std.data = cat(2, obj(2,ii).spectra_std.data, obj(1,ii).spectra_std.data);
+%                a = cat(2, obj(2,ii).spectra_std.data, obj(1,ii).spectra_std.data);
+%                ConcatObj(1,ii).spectra_std.data = a;
 
                ConcatObj(1,ii).wavelengths = obj(1,ii).wavelengths; % Write the wavelengths into the new object
 
