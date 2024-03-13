@@ -413,7 +413,8 @@ classdef transientSpectra
                 t = t(~tnan);
 
                 % Remove any NaN points that are NaN for all wavelengths within a given spectrum
-                lnan = any(all(isnan(s),2),3);
+%                 lnan = any(all(isnan(s),2),3);
+                lnan = any(any(isnan(s),2),3);
                 s = s(~lnan,:,:);
                 l = l(~lnan);
 
